@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android
+local.properties
+*.jks
+*.keystore
+*.p12
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Crash logs
+crash.log
+
+# CLAUDE.md (AI assistant config, not needed for public repo)
+CLAUDE.md
+build_log.txt

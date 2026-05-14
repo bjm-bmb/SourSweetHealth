@@ -1,6 +1,6 @@
 # 酸甜知己 · SourSweetHealth
 
-![版本](https://img.shields.io/badge/版本-1.0.0-blue) ![协议](https://img.shields.io/badge/协议-Apache%202.0-green) ![平台](https://img.shields.io/badge/平台-Android-brightgreen)
+![版本](https://img.shields.io/badge/版本-1.0.1-blue) ![协议](https://img.shields.io/badge/协议-Apache%202.0-green) ![平台](https://img.shields.io/badge/平台-Android-brightgreen)
 
 **「酸」是尿酸，「甜」是血糖，「知己」是懂你健康的贴心伴侣。**
 
@@ -12,7 +12,7 @@
 
 - 📊 **血糖与尿酸随手记** — 支持多时段（空腹、餐后1小时、餐后2小时等）记录
 - 📈 **趋势图表可视化** — 按 7天 / 30天 / 3个月 / 自定义 / 全部历史查看，支持手势滑动、点击查看详情、长按编辑
-- 🤖 **AI 健康分析** — 支持任何兼容 OpenAI 接口的大模型（SiliconFlow、DeepSeek、通义千问、OpenAI 等），像朋友聊天一样分析健康趋势
+- 🤖 **AI 健康分析** — 支持硅基流动、DeepSeek、小米 MiMo 等兼容 OpenAI 接口的大模型，选择提供商后自动填充 API 地址和候选模型
 - 💡 **偏高快速建议** — 数值偏高时一键获取 AI 医生建议
 - 👨‍👩‍👧‍👦 **多用户管理** — 支持家庭成员独立档案管理
 
@@ -44,7 +44,7 @@
 ### 构建步骤
 
 ```bash
-git clone https://github.com/your-username/SourSweetHealth.git
+git clone https://github.com/bjm-bmb/SourSweetHealth.git
 cd SourSweetHealth
 ./gradlew assembleDebug
 ```
@@ -55,9 +55,14 @@ APK 输出路径：`app/build/outputs/apk/debug/SourSweetHealth.apk`
 
 1. 在应用主界面左上角点击设置图标
 2. 进入「大模型设置」页面
-3. 填入任意兼容 OpenAI 接口的 API 地址、Key 和模型名称
+3. 从下拉列表选择模型提供商（硅基流动、DeepSeek、小米 MiMo），API 地址和候选模型会自动填充
+4. 填入对应平台的 API Key
+5. 选择或手动输入模型名称
 
-推荐免费使用 [SiliconFlow](https://cloud.siliconflow.cn) 提供的大模型服务。
+支持的提供商：
+- [硅基流动 SiliconFlow](https://cloud.siliconflow.cn) — 推荐，有免费额度
+- [DeepSeek](https://platform.deepseek.com) — deepseek-v4-flash / deepseek-v4-pro
+- [小米 MiMo](https://mimo-v2.com) — mimo-v2.5-pro / mimo-v2.5
 
 ## 项目结构
 

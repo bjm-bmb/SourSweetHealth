@@ -127,7 +127,6 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Text("大模型 API 配置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
             // Provider selector
-            Text("模型提供商", fontWeight = FontWeight.Medium, fontSize = 14.sp)
             ExposedDropdownMenuBox(
                 expanded = providerExpanded,
                 onExpandedChange = { providerExpanded = it }
@@ -137,6 +136,7 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     onValueChange = {},
                     readOnly = true,
                     singleLine = true,
+                    label = { Text("模型提供商") },
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) }
                 )
@@ -188,7 +188,6 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
             // Model name with dropdown suggestions
             val currentModels = providers[selectedProvider].models
-            Text("模型名称", fontWeight = FontWeight.Medium, fontSize = 14.sp)
             if (currentModels.isNotEmpty()) {
                 ExposedDropdownMenuBox(
                     expanded = modelExpanded,
@@ -198,6 +197,7 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         value = modelText,
                         onValueChange = { modelText = it },
                         singleLine = true,
+                        label = { Text("模型名称") },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                         placeholder = { Text("选择或输入模型名称") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
@@ -224,6 +224,7 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     value = modelText,
                     onValueChange = { modelText = it },
                     singleLine = true,
+                    label = { Text("模型名称") },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("输入模型名称") }
                 )

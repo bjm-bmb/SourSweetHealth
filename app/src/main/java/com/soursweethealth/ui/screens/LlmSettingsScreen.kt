@@ -1,5 +1,6 @@
 package com.soursweethealth.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,17 +29,17 @@ private val providers = listOf(
     ProviderPreset(
         name = "硅基流动 (SiliconFlow)",
         apiUrl = "https://api.siliconflow.cn/v1/chat/completions",
-        models = listOf("Pro/THUDM/glm-4-9b-chat", "Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V2.5", "THUDM/glm-4-9b-chat")
+        models = listOf("deepseek-ai/DeepSeek-V4-Flash", "Pro/moonshotai/Kimi-K2.6", "Pro/zai-org/GLM-5.1")
     ),
     ProviderPreset(
         name = "DeepSeek",
         apiUrl = "https://api.deepseek.com",
-        models = listOf("deepseek-chat", "deepseek-reasoner")
+        models = listOf("deepseek-v4-flash", "deepseek-v4-pro")
     ),
     ProviderPreset(
-        name = "小米 (MiLLM)",
-        apiUrl = "https://api.micloud.xiaomi.net/v1/chat/completions",
-        models = listOf("mi-llm-large", "mi-llm-medium", "mi-llm-small")
+        name = "小米 (MiMo)",
+        apiUrl = "https://api.mimo-v2.com/v1",
+        models = listOf("MiMo-V2.5-Pro", "MiMo-V2.5")
     ),
     ProviderPreset(
         name = "其他 (自定义)",
@@ -135,7 +137,8 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 )
                 ExposedDropdownMenu(
                     expanded = providerExpanded,
-                    onDismissRequest = { providerExpanded = false }
+                    onDismissRequest = { providerExpanded = false },
+                    modifier = Modifier.background(Color.White)
                 ) {
                     providers.forEachIndexed { index, provider ->
                         DropdownMenuItem(
@@ -197,7 +200,8 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     )
                     ExposedDropdownMenu(
                         expanded = modelExpanded,
-                        onDismissRequest = { modelExpanded = false }
+                        onDismissRequest = { modelExpanded = false },
+                        modifier = Modifier.background(Color.White)
                     ) {
                         currentModels.forEach { model ->
                             DropdownMenuItem(

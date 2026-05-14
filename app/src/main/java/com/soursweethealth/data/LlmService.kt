@@ -107,6 +107,8 @@ class LlmService {
         return when {
             trimmed.endsWith("/chat/completions") -> trimmed
             trimmed.endsWith("/v1") -> "$trimmed/chat/completions"
+            // For DeepSeek-style URLs (e.g. https://api.deepseek.com), append /chat/completions directly
+            trimmed.matches(Regex("https?://[^/]+")) -> "$trimmed/chat/completions"
             else -> "$trimmed/v1/chat/completions"
         }
     }

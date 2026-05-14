@@ -7,14 +7,44 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.soursweethealth.ui.MainViewModel
+
+// Provider presets
+private data class ProviderPreset(
+    val name: String,
+    val apiUrl: String,
+    val models: List<String>
+)
+
+private val providers = listOf(
+    ProviderPreset(
+        name = "硅基流动 (SiliconFlow)",
+        apiUrl = "https://api.siliconflow.cn/v1/chat/completions",
+        models = listOf("Pro/THUDM/glm-4-9b-chat", "Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V2.5", "THUDM/glm-4-9b-chat")
+    ),
+    ProviderPreset(
+        name = "DeepSeek",
+        apiUrl = "https://api.deepseek.com",
+        models = listOf("deepseek-chat", "deepseek-reasoner")
+    ),
+    ProviderPreset(
+        name = "小米 (MiLLM)",
+        apiUrl = "https://api.micloud.xiaomi.net/v1/chat/completions",
+        models = listOf("mi-llm-large", "mi-llm-medium", "mi-llm-small")
+    ),
+    ProviderPreset(
+        name = "其他 (自定义)",
+        apiUrl = "",
+        models = emptyList()
+    )
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +57,16 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var keyText by remember(apiKey) { mutableStateOf(apiKey) }
     var modelText by remember(modelName) { mutableStateOf(modelName) }
     var showAbout by remember { mutableStateOf(false) }
+
+    // Provider dropdown state
+    var providerExpanded by remember { mutableStateOf(false) }
+    var selectedProvider by remember {
+        val matched = providers.indexOfFirst { it.apiUrl.isNotBlank() && apiUrl.contains(it.apiUrl.removePrefix("https://").substringBefore("/")) }
+        mutableIntStateOf(if (matched >= 0) matched else providers.lastIndex)
+    }
+
+    // Model dropdown state
+    var modelExpanded by remember { mutableStateOf(false) }
 
     if (showAbout) {
         AlertDialog(
@@ -45,7 +85,7 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         fontSize = 14.sp, lineHeight = 22.sp
                     )
                     Text(
-                        "AI 分析说明：支持任何兼容 OpenAI 接口的大模型，包括硅基流动、DeepSeek、通义千问、OpenAI 等，在下方填入您的 API 地址、Key 和模型名称即可启用。",
+                        "AI 分析说明：支持任何兼容 OpenAI 接口的大模型，包括硅基流动、DeepSeek、小米等，选择提供商后会自动填充 API 地址。",
                         fontSize = 14.sp, lineHeight = 22.sp,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f)
                     )
@@ -79,22 +119,56 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         ) {
             Text("大模型 API 配置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
-            Text(
-                "支持任何兼容 OpenAI 接口规范的大模型服务，如硅基流动、DeepSeek、通义千问等，填入对应的 API 地址、Key 和模型名称即可。",
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                fontSize = 13.sp,
-                lineHeight = 20.sp
-            )
+            // Provider selector
+            Text("模型提供商", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            ExposedDropdownMenuBox(
+                expanded = providerExpanded,
+                onExpandedChange = { providerExpanded = it }
+            ) {
+                OutlinedTextField(
+                    value = providers[selectedProvider].name,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) }
+                )
+                ExposedDropdownMenu(
+                    expanded = providerExpanded,
+                    onDismissRequest = { providerExpanded = false }
+                ) {
+                    providers.forEachIndexed { index, provider ->
+                        DropdownMenuItem(
+                            text = { Text(provider.name, fontSize = 15.sp) },
+                            onClick = {
+                                selectedProvider = index
+                                providerExpanded = false
+                                // Auto-fill URL
+                                if (provider.apiUrl.isNotBlank()) {
+                                    urlText = provider.apiUrl
+                                }
+                                // Auto-fill first model if available
+                                if (provider.models.isNotEmpty()) {
+                                    modelText = provider.models.first()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
 
+            // API URL
             OutlinedTextField(
                 value = urlText,
                 onValueChange = { urlText = it },
                 label = { Text("API 地址") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("https://api.siliconflow.cn/v1/chat/completions") }
+                placeholder = { Text("https://api.deepseek.com") },
+                supportingText = { Text("可手动修改，系统会自动补全路径", fontSize = 12.sp) }
             )
 
+            // API Key
             OutlinedTextField(
                 value = keyText,
                 onValueChange = { keyText = it },
@@ -104,14 +178,47 @@ fun LlmSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 placeholder = { Text("sk-...") }
             )
 
-            OutlinedTextField(
-                value = modelText,
-                onValueChange = { modelText = it },
-                label = { Text("模型名称") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Pro/THUDM/glm-4-9b-chat") }
-            )
+            // Model name with dropdown suggestions
+            val currentModels = providers[selectedProvider].models
+            Text("模型名称", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            if (currentModels.isNotEmpty()) {
+                ExposedDropdownMenuBox(
+                    expanded = modelExpanded,
+                    onExpandedChange = { modelExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = modelText,
+                        onValueChange = { modelText = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        placeholder = { Text("选择或输入模型名称") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
+                        supportingText = { Text("可从列表选择，也可手动输入", fontSize = 12.sp) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = modelExpanded,
+                        onDismissRequest = { modelExpanded = false }
+                    ) {
+                        currentModels.forEach { model ->
+                            DropdownMenuItem(
+                                text = { Text(model, fontSize = 14.sp) },
+                                onClick = {
+                                    modelText = model
+                                    modelExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = modelText,
+                    onValueChange = { modelText = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("输入模型名称") }
+                )
+            }
 
             Button(
                 onClick = {

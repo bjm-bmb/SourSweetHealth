@@ -48,6 +48,12 @@ class LlmService {
         maxTokens: Int = 512
     ): Flow<Result<String>> = flow {
         try {
+            // Normalize URL: if it doesn't end with /chat/completions, append it
+            // This makes the app compatible with:
+            //   - Full endpoint URLs like https://api.siliconflow.cn/v1/chat/completions
+            //   - Base URLs like https://api.deepseek.com or https://api.openai.com/v1
+            val normalizedUrl = normalizeApiUrl(apiUrl)
+
             val body = gson.toJson(
                 ChatRequest(
                     model = modelName,
@@ -60,7 +66,7 @@ class LlmService {
                 )
             )
             val request = Request.Builder()
-                .url(apiUrl)
+                .url(normalizedUrl)
                 .addHeader("Authorization", "Bearer $apiKey")
                 .addHeader("Content-Type", "application/json")
                 .post(body.toRequestBody("application/json".toMediaType()))
@@ -94,4 +100,14 @@ class LlmService {
             emit(Result.failure(e))
         }
     }.flowOn(Dispatchers.IO)
+
+    /** Normalize API URL to ensure it ends with /chat/completions */
+    private fun normalizeApiUrl(url: String): String {
+        val trimmed = url.trimEnd('/')
+        return when {
+            trimmed.endsWith("/chat/completions") -> trimmed
+            trimmed.endsWith("/v1") -> "$trimmed/chat/completions"
+            else -> "$trimmed/v1/chat/completions"
+        }
+    }
 }

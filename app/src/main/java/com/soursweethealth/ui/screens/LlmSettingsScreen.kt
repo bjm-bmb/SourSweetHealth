@@ -37,8 +37,13 @@ private val providers = listOf(
         models = listOf("deepseek-v4-flash", "deepseek-v4-pro")
     ),
     ProviderPreset(
-        name = "小米 (MiMo)",
+        name = "小米 MiMo (mimo-v2)",
         apiUrl = "https://api.mimo-v2.com/v1",
+        models = listOf("MiMo-V2.5-Pro", "MiMo-V2.5")
+    ),
+    ProviderPreset(
+        name = "小米 MiMo (token-plan)",
+        apiUrl = "https://token-plan-cn.xiaomimimo.com/v1",
         models = listOf("MiMo-V2.5-Pro", "MiMo-V2.5")
     ),
     ProviderPreset(

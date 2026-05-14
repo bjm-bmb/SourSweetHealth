@@ -160,7 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 val accumulated = StringBuilder()
                 var hasError = false
-                llmService.chatStream(url, key, model, sb.toString(), maxTokens = 300).collect { result ->
+                llmService.chatStream(url, key, model, sb.toString(), maxTokens = 4096).collect { result ->
                     result.onSuccess { token ->
                         accumulated.append(token)
                         _analysisResult.value = accumulated.toString()
@@ -236,7 +236,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 val accumulated = StringBuilder()
                 var hasError = false
-                llmService.chatStream(url, key, model, prompt, maxTokens = 100).collect { result ->
+                llmService.chatStream(url, key, model, prompt, maxTokens = 2048).collect { result ->
                     result.onSuccess { token ->
                         accumulated.append(token)
                         _quickAdviceResult.value = accumulated.toString()

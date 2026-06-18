@@ -210,7 +210,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isQuickAdvising = MutableStateFlow(false)
     val isQuickAdvising: StateFlow<Boolean> = _isQuickAdvising
 
-    fun getQuickAdvice(type: String, value: Double, gender: String, age: Int) {
+    fun getQuickAdvice(type: String, value: Double, gender: String, age: Int, measureTime: String = "空腹（起床后）") {
         if (_isQuickAdvising.value) return
         // Set flag immediately so spinner appears without delay
         _isQuickAdvising.value = true
@@ -219,9 +219,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Build prompt here (on calling thread) before launching coroutine — no DB fetch needed, data comes from screen
         val typeName = HealthUtils.getTypeName(type)
         val unit = HealthUtils.getUnit(type)
-        val level = HealthUtils.getLevel(type, value, gender)
+        val level = HealthUtils.getLevel(type, value, gender, measureTime)
         val levelText = if (level == HealthLevel.HIGH) "偏高" else "明显偏高"
-        val prompt = "${gender}性${age}岁，${typeName}${String.format("%.1f", value)}${unit}，${levelText}。请两段简要当面说明：第一段说数值意义；第二段给**最重要一条**建议。温暖鼓励，可加表情，80字以内。"
+        val timeHint = if (type == "blood_sugar") "，${measureTime}测量" else ""
+        val prompt = "${gender}性${age}岁，${typeName}${String.format("%.1f", value)}${unit}${timeHint}，${levelText}。请两段简要当面说明：第一段说数值意义；第二段给**最重要一条**建议。温暖鼓励，可加表情，80字以内。"
 
         viewModelScope.launch {
             try {

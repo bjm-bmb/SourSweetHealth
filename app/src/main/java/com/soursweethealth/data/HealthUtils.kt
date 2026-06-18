@@ -1,14 +1,25 @@
 package com.soursweethealth.data
 
 object HealthUtils {
-    // Blood sugar thresholds (mmol/L)
-    // Based on ADA (American Diabetes Association) standards:
-    // Fasting: Normal <5.6, Prediabetes 5.6-6.9, Diabetes ≥7.0
-    // Postprandial 2h: Normal <7.8, Prediabetes 7.8-11.0, Diabetes ≥11.1
-    fun bloodSugarLevel(value: Double): HealthLevel {
+    // Blood sugar thresholds (mmol/L) vary by measurement time:
+    // 空腹: Normal <6.1, Prediabetes 6.1-7.0, Diabetes ≥7.0
+    // 餐后1h: Normal <9.4, Borderline 9.4-11.1, High ≥11.1
+    // 餐后2h: Normal <7.8, Prediabetes 7.8-11.1, Diabetes ≥11.1
+    // 其他时间: same as 空腹 (conservative)
+
+    private fun bloodSugarThresholds(measureTime: String): Pair<Double, Double> {
         return when {
-            value < 6.1 -> HealthLevel.NORMAL
-            value < 7.0 -> HealthLevel.HIGH
+            measureTime.contains("餐后1") -> 9.4 to 11.1
+            measureTime.contains("餐后2") -> 7.8 to 11.1
+            else -> 6.1 to 7.0  // 空腹、其他时间
+        }
+    }
+
+    fun bloodSugarLevel(value: Double, measureTime: String = "空腹（起床后）"): HealthLevel {
+        val (normal, veryHigh) = bloodSugarThresholds(measureTime)
+        return when {
+            value < normal -> HealthLevel.NORMAL
+            value < veryHigh -> HealthLevel.HIGH
             else -> HealthLevel.VERY_HIGH
         }
     }
@@ -26,8 +37,8 @@ object HealthUtils {
         }
     }
 
-    fun getLevel(type: String, value: Double, gender: String = "男"): HealthLevel {
-        return if (type == "blood_sugar") bloodSugarLevel(value) else uricAcidLevel(value, gender)
+    fun getLevel(type: String, value: Double, gender: String = "男", measureTime: String = "空腹（起床后）"): HealthLevel {
+        return if (type == "blood_sugar") bloodSugarLevel(value, measureTime) else uricAcidLevel(value, gender)
     }
 
     fun getUnit(type: String): String {
@@ -46,17 +57,18 @@ object HealthUtils {
         }
     }
 
-    /** Returns (normalMax, highMax) thresholds for drawing colored zones */
-    fun getThresholds(type: String, gender: String = "男"): Pair<Double, Double> {
+    /** Returns (normalMax, highMax) thresholds for drawing colored zones.
+     *  For blood_sugar, thresholds depend on measureTime. */
+    fun getThresholds(type: String, gender: String = "男", measureTime: String = "空腹（起床后）"): Pair<Double, Double> {
         return if (type == "blood_sugar") {
-            6.1 to 7.0
+            bloodSugarThresholds(measureTime)
         } else {
             if (gender == "男") 420.0 to 480.0 else 360.0 to 420.0
         }
     }
 
-    fun getWarningText(type: String, value: Double, gender: String = "男"): String? {
-        val level = getLevel(type, value, gender)
+    fun getWarningText(type: String, value: Double, gender: String = "男", measureTime: String = "空腹（起床后）"): String? {
+        val level = getLevel(type, value, gender, measureTime)
         if (level == HealthLevel.NORMAL) return null
         val typeName = getTypeName(type)
         val unit = getUnit(type)

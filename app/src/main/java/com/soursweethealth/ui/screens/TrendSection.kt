@@ -50,6 +50,8 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
     var selectedType by remember { mutableStateOf("blood_sugar") }
     var selectedRange by remember { mutableStateOf("30d") }
     var showCustomPickers by remember { mutableStateOf(true) }
+    var selectedMeasureTime by remember { mutableStateOf("全部") }
+    var measureTimeDropdownExpanded by remember { mutableStateOf(false) }
 
     val today = LocalDate.now()
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -211,13 +213,54 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
-                // Type selector
+                // Type selector + MeasureTime dropdown
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TypeChip("血糖", selectedType == "blood_sugar") { selectedType = "blood_sugar" }
                     TypeChip("尿酸", selectedType == "uric_acid") { selectedType = "uric_acid" }
+
+                    Spacer(Modifier.width(4.dp))
+
+                    // MeasureTime dropdown
+                    Box {
+                        Surface(
+                            onClick = { measureTimeDropdownExpanded = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selectedMeasureTime != "全部") LightBlue100 else Color(0xFFF5F5F5),
+                            contentColor = if (selectedMeasureTime != "全部") LightBlue700 else Color(0xFF444444)
+                        ) {
+                            Text(
+                                selectedMeasureTime,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                fontSize = 13.sp,
+                                fontWeight = if (selectedMeasureTime != "全部") FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = measureTimeDropdownExpanded,
+                            onDismissRequest = { measureTimeDropdownExpanded = false }
+                        ) {
+                            val timeOptions = listOf("全部") + HealthUtils.getMeasureTimeOptions(selectedType)
+                            timeOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            option,
+                                            fontSize = 14.sp,
+                                            fontWeight = if (option == selectedMeasureTime) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (option == selectedMeasureTime) LightBlue700 else Color.Unspecified
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedMeasureTime = option
+                                        measureTimeDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -275,7 +318,11 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
             // Chart area — use filtered records for range chips, allRecords for "查看全部"
             // getRecordsByDateRange returns ASC (oldest→newest) — already correct order for the chart
             // getRecordsByUserAndType returns DESC (newest→oldest) — needs reversing
-            val chartRecords = if (selectedRange == "all") allRecords.reversed() else records
+            val chartRecords = remember(selectedRange, records, allRecords, selectedMeasureTime) {
+                val base = if (selectedRange == "all") allRecords.reversed() else records
+                if (selectedMeasureTime == "全部") base else base.filter { it.measureTime == selectedMeasureTime }
+            }
+            val effectiveMeasureTime = if (selectedMeasureTime == "全部") "空腹（起床后）" else selectedMeasureTime
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 if (allRecords.isEmpty()) {
                     Text("暂无${HealthUtils.getTypeName(selectedType)}记录", color = Color(0xFFBBBBBB), fontSize = 15.sp)
@@ -286,6 +333,7 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                         records = remember(chartRecords) { chartRecords },
                         type = selectedType,
                         gender = user.gender,
+                        measureTime = effectiveMeasureTime,
                         onEditRecord = { record ->
                             editValueText = if (selectedType == "uric_acid") String.format("%.0f", record.value) else String.format("%.1f", record.value)
                             showDeleteConfirm = false
@@ -324,11 +372,11 @@ fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun TrendChart(records: List<HealthRecord>, type: String, gender: String, onEditRecord: (HealthRecord) -> Unit = {}) {
+fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measureTime: String = "空腹（起床后）", onEditRecord: (HealthRecord) -> Unit = {}) {
     var selectedPoint by remember(records) { mutableStateOf<Int?>(null) }
 
     val tooltipRecord = selectedPoint?.let { records.getOrNull(it) }
-    val (thresholdNormal, thresholdHigh) = HealthUtils.getThresholds(type, gender)
+    val (thresholdNormal, thresholdHigh) = HealthUtils.getThresholds(type, gender, measureTime)
 
     // Minimum spacing between points in px
     val minPointSpacing = 60f
@@ -509,7 +557,7 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, onEdit
                 val x = xForIndex(i); val y = yForValue(record.value)
                 // Only draw points that are roughly within visible area
                 if (x >= paddingLeft - 14f && x <= paddingLeft + chartWidth + 14f) {
-                    val level = HealthUtils.getLevel(type, record.value, gender)
+                    val level = HealthUtils.getLevel(type, record.value, gender, record.measureTime)
                     val color = levelToColor(level)
                     drawCircle(color = color, radius = if (i == selectedPoint) 16f else 12f, center = Offset(x, y))
                     drawCircle(color = Color.White, radius = 5f, center = Offset(x, y))
@@ -548,7 +596,7 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, onEdit
 
         // Tooltip
         tooltipRecord?.let { record ->
-            val level = HealthUtils.getLevel(type, record.value, gender)
+            val level = HealthUtils.getLevel(type, record.value, gender, record.measureTime)
             val color = levelToColor(level)
             val unit = HealthUtils.getUnit(type)
             val warning = if (level == HealthLevel.VERY_HIGH) " ⚠️ 数值偏高" else ""

@@ -268,8 +268,8 @@ fun LatestRecordsSection(viewModel: MainViewModel, user: User) {
     val age = LocalDate.now().year - user.birthYear
 
     // Check for abnormal values
-    val bsWarning = latestBS?.let { HealthUtils.getWarningText("blood_sugar", it.value, user.gender) }
-    val uaWarning = latestUA?.let { HealthUtils.getWarningText("uric_acid", it.value, user.gender) }
+    val bsWarning = latestBS?.let { HealthUtils.getWarningText("blood_sugar", it.value, user.gender, it.measureTime) }
+    val uaWarning = latestUA?.let { HealthUtils.getWarningText("uric_acid", it.value, user.gender, it.measureTime) }
 
     if (showAdviceDialog) {
         val isAdvising by viewModel.isQuickAdvising.collectAsState()
@@ -318,19 +318,19 @@ fun LatestRecordsSection(viewModel: MainViewModel, user: User) {
         HealthCard(Modifier.weight(1f).fillMaxHeight(), "血糖", latestBS, "blood_sugar", user.gender, bsWarning) {
             adviceType = "blood_sugar"
             showAdviceDialog = true
-            latestBS?.let { viewModel.getQuickAdvice("blood_sugar", it.value, user.gender, age) }
+            latestBS?.let { viewModel.getQuickAdvice("blood_sugar", it.value, user.gender, age, it.measureTime) }
         }
         HealthCard(Modifier.weight(1f).fillMaxHeight(), "尿酸", latestUA, "uric_acid", user.gender, uaWarning) {
             adviceType = "uric_acid"
             showAdviceDialog = true
-            latestUA?.let { viewModel.getQuickAdvice("uric_acid", it.value, user.gender, age) }
+            latestUA?.let { viewModel.getQuickAdvice("uric_acid", it.value, user.gender, age, it.measureTime) }
         }
     }
 }
 
 @Composable
 fun HealthCard(modifier: Modifier, title: String, record: HealthRecord?, type: String, gender: String, warning: String? = null, onWarningClick: () -> Unit = {}) {
-    val level = record?.let { HealthUtils.getLevel(type, it.value, gender) }
+    val level = record?.let { HealthUtils.getLevel(type, it.value, gender, it.measureTime) }
     val levelColor = when (level) {
         HealthLevel.NORMAL -> HealthGreen; HealthLevel.HIGH -> HealthYellow; HealthLevel.VERY_HIGH -> HealthRed; null -> Color(0xFFCCCCCC)
     }

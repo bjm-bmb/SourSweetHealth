@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 能力沉淀"
+  short_description: "闭环收尾回顾可复用能力，主动询问是否沉淀回 app-agent 规范包"
+  default_prompt: "使用 $bjm-app-harvest 回顾本轮任务的可复用能力，有候选时列清单交我选择是否沉淀。"

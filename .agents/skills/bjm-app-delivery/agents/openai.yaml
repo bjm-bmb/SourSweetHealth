@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 闭环交付"
+  short_description: "按已确认任务卡完成规划、开发、构建验证与独立评审"
+  default_prompt: "使用 $bjm-app-delivery 按任务卡执行闭环交付，评审 FAIL 时按证据修复复评，最多两轮。"

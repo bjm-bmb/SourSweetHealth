@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 真机自动化测试"
+  short_description: "等待手机连接后自动安装、启动、跑 UI 断言并留存截图与日志"
+  default_prompt: "使用 $bjm-app-device-test 执行真机验证：先提醒我连接手机并授权 USB 调试，随后构建安装、启动应用、运行 UI 测试并采集截图与 logcat 证据。"

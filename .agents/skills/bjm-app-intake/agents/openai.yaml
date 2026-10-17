@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 需求受理"
+  short_description: "需求方只提概要需求，Agent 自动起草任务卡并经确认后进入闭环"
+  default_prompt: "使用 $bjm-app-intake 受理此需求，起草任务卡并交我确认后再进入交付闭环。"

@@ -1,0 +1,64 @@
+package {{package}}.ui.components
+
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import {{package}}.ui.theme.Spacing
+
+/** 主按钮：强调色实心、48dp 高、12dp 圆角。同屏最多一个。 */
+@Composable
+fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(Spacing.buttonHeight),
+        enabled = enabled,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** 次要按钮：描边样式，用于同屏次操作。 */
+@Composable
+fun SecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(Spacing.buttonHeight),
+        enabled = enabled,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** 文字按钮：三级操作（如区块尾部动作）。 */
+@Composable
+fun AppTextButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 设计系统实例化"
+  short_description: "把品牌 VI 与组件库落到目标 app：token 就位、组件复制、界面迁移、构建验证"
+  default_prompt: "使用 $bjm-app-ui 把品牌 VI 与设计系统实例化到本 app，完成后跑 app_check 与构建验证。"

@@ -1,0 +1,40 @@
+package {{package}}.ui.components
+
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+
+/** 输入框：12dp 圆角描边样式，文案与态样一律走 theme。 */
+@Composable
+fun AppTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String? = null,
+    singleLine: Boolean = true,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        label = label?.let {
+            { Text(text = it, style = MaterialTheme.typography.bodySmall) }
+        },
+        placeholder = placeholder?.let {
+            {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        singleLine = singleLine,
+        shape = MaterialTheme.shapes.medium,
+        textStyle = MaterialTheme.typography.bodyLarge,
+    )
+}

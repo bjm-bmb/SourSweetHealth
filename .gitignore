@@ -20,3 +20,4 @@ crash.log
 # CLAUDE.md (AI assistant config, not needed for public repo)
 CLAUDE.md
 build_log.txt
+.agent-artifacts/

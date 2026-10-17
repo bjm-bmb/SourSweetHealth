@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 品牌 VI"
+  short_description: "定义/变更品牌 VI 手册并落地为 brand-tokens，再同步到各 app"
+  default_prompt: "使用 $bjm-app-brand 定义品牌 VI：收集品牌输入，重写 brand-vi.md 与 brand-tokens，确认后提示我同步到各 app。"

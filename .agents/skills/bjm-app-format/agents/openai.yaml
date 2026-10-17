@@ -1,0 +1,4 @@
+interface:
+  display_name: "BJM App 工程规范"
+  short_description: "Android 工程规范唯一权威：基线版本、Compose 配对、签名与密钥边界"
+  default_prompt: "使用 $bjm-app-format 核对本项目的工程配置与代码是否符合规范。"

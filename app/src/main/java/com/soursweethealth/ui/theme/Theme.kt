@@ -1,42 +1,116 @@
 package com.soursweethealth.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-val LightBlue50 = Color(0xFFE1F5FE)
-val LightBlue100 = Color(0xFFB3E5FC)
-val LightBlue200 = Color(0xFF81D4FA)
-val LightBlue400 = Color(0xFF29B6F6)
-val LightBlue600 = Color(0xFF039BE5)
-val LightBlue700 = Color(0xFF0288D1)
-val White = Color(0xFFFFFFFF)
-val LightGray = Color(0xFFF5F5F5)
+/** 健康水平语义色（随深浅色切换），图表与卡片徽标使用。 */
+data class HealthLevelColors(
+    val normal: Color,
+    val high: Color,
+    val low: Color,
+    val critical: Color
+)
 
-val HealthGreen = Color(0xFF4CAF50)
-val HealthYellow = Color(0xFFFFC107)
-val HealthRed = Color(0xFFF44336)
+private val LightHealthLevels = HealthLevelColors(
+    normal = HealthGreen,
+    high = HealthYellow,
+    low = HealthOrange,
+    critical = HealthRed
+)
+
+private val DarkHealthLevels = HealthLevelColors(
+    normal = HealthGreenDark,
+    high = HealthYellowDark,
+    low = HealthOrangeDark,
+    critical = HealthRedDark
+)
+
+val LocalHealthLevels = staticCompositionLocalOf { LightHealthLevels }
+
+/** 图表配色：折线用加深主色，网格用最浅分隔线。 */
+data class ChartColors(
+    val line: Color,
+    val grid: Color
+)
+
+private val LightChartColors = ChartColors(
+    line = BrandColors.accentStrongLight,
+    grid = NeutralOutlineVariant
+)
+
+private val DarkChartColors = ChartColors(
+    line = BrandColors.accentStrongDark,
+    grid = NeutralOutlineVariantDark
+)
+
+val LocalChartColors = staticCompositionLocalOf { LightChartColors }
 
 private val LightColorScheme = lightColorScheme(
-    primary = LightBlue600,
-    onPrimary = White,
-    primaryContainer = LightBlue100,
-    onPrimaryContainer = Color(0xFF01579B),
-    secondary = LightBlue400,
-    onSecondary = White,
-    background = LightGray,
-    onBackground = Color(0xFF1C1B1F),
-    surface = White,
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = LightBlue50,
-    outline = Color(0xFFBDBDBD)
+    primary = Accent,
+    onPrimary = OnAccent,
+    primaryContainer = AccentContainer,
+    onPrimaryContainer = OnAccentContainer,
+    secondary = AccentSecondary,
+    onSecondary = OnAccent,
+    secondaryContainer = AccentSecondaryContainer,
+    onSecondaryContainer = NeutralText,
+    background = NeutralBackground,
+    onBackground = NeutralText,
+    surface = NeutralSurface,
+    onSurface = NeutralText,
+    surfaceVariant = NeutralSurfaceVariant,
+    onSurfaceVariant = NeutralTextSecondary,
+    outline = NeutralOutline,
+    outlineVariant = NeutralOutlineVariant,
+    error = HealthRed,
+    onError = OnAccent,
+    errorContainer = HealthErrorContainer,
+    onErrorContainer = NeutralText
+)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = AccentDark,
+    onPrimary = OnAccentDark,
+    primaryContainer = AccentContainerDark,
+    onPrimaryContainer = OnAccentContainerDark,
+    secondary = AccentSecondaryDark,
+    onSecondary = OnAccentDark,
+    secondaryContainer = AccentSecondaryContainerDark,
+    onSecondaryContainer = NeutralTextDark,
+    background = NeutralBackgroundDark,
+    onBackground = NeutralTextDark,
+    surface = NeutralSurfaceDark,
+    onSurface = NeutralTextDark,
+    surfaceVariant = NeutralSurfaceVariantDark,
+    onSurfaceVariant = NeutralTextSecondaryDark,
+    outline = NeutralOutlineDark,
+    outlineVariant = NeutralOutlineVariantDark,
+    error = HealthRedDark,
+    onError = OnAccentDark,
+    errorContainer = HealthErrorContainerDark,
+    onErrorContainer = NeutralTextDark
 )
 
 @Composable
-fun SourSweetHealthTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = LightColorScheme,
-        content = content
-    )
+fun SourSweetHealthTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    CompositionLocalProvider(
+        LocalHealthLevels provides if (darkTheme) DarkHealthLevels else LightHealthLevels,
+        LocalChartColors provides if (darkTheme) DarkChartColors else LightChartColors
+    ) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
+            typography = AppTypography,
+            shapes = AppShapes,
+            content = content
+        )
+    }
 }

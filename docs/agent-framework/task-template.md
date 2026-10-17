@@ -20,7 +20,9 @@
 
 ## 范围
 
-- 允许修改：
+- 允许修改（逐条写**完整仓库相对路径或目录前缀**，供 `tools/scope_check.py` 机械比对；禁止只写类名、文件名或自然语言描述）：
+  - `app/src/main/java/...`
+  - `app/src/test/java/...`
 - 明确不修改：
 - 显式不做清单（超出范围不做的页面 / 接口 / 第三方依赖 / 配置项，防开发阶段过度发挥）：
 - 参考既有代码 / 文档：
@@ -30,7 +32,7 @@
 - 页面与导航：
 - 数据与状态（数据来源、状态流转）：
 - 涉及文件 / 模块：
-- 依赖变更（新增第三方库须在此显式列出，含版本；无则写「不涉及」）：
+- 依赖变更（新增第三方库须在此显式列出，含版本；验收要求运行单测时须核实 `testImplementation` 实际存在，缺失则写明新增测试依赖及允许修改的构建文件范围；无则写「不涉及」）：
 - 工程配置变更（基线版本、签名、混淆、权限等；无则写「不涉及」）：
 
 ## 验收条件
@@ -46,14 +48,19 @@
 
 - 验证命令（默认 `.\gradlew.bat testDebugUnitTest assembleDebug`）：
 - 必须通过：`python tools/app_check.py .` 退出码为 0（WARN 逐条人工确认）
+- 必须通过：`python tools/scope_check.py --task <本任务卡> --since <基线 SHA>` 退出码为 0（改动必须全部落在「允许修改」路径内）
 - JDK/SDK 环境：JDK 17（`C:\Android\jdk17\jdk17`）、Android SDK（`C:\Android\Sdk`）
 
 ## 真机验证
 
 - 是否需要真机验证：需要 / 不需要（涉及界面、导航、权限、启动流程时为「需要」）
 - 执行命令（默认 `powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir .`）：
-- 通过标准：脚本退出码为 0（PASS），`result.json` 中安装、启动、进程存活、崩溃检查均为 PASS
-- UI 断言范围（需要时填写要断言的页面与关键路径；无则写「仅冒烟」）：
+- 交互必点路径（涉及界面/主题/形状/列表布局/设置项/对话框/导航时必填，冒烟不算验收；按 `tap:控件文本;assert:期望文本;shot:名称` 填写）：
+  ```text
+  -UiSteps "tap:设置;assert:自动涌现;tap:自动涌现;assert:每天早上 6 点;shot:surge-dialog"
+  ```
+- 通过标准：脚本退出码为 0（PASS），`result.json` 中安装、启动、进程存活、交互复核、崩溃检查均为 PASS
+- UI 断言范围（需要时填写要断言的页面与关键路径；无则写「仅冒烟」，且说明为何没有界面影响）：
 - 设备要求：真机（API 级别 ≥ minSdk）；多设备时指定 `-Serial`
 - 设备不可用时的处理：返回 `BLOCKED` 并提示需求方连接手机，不以静态检查替代
 

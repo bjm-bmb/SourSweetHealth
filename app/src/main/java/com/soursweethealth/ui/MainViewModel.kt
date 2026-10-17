@@ -9,6 +9,10 @@ import com.soursweethealth.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.net.URI
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = (application as SourSweetApp).database
@@ -19,15 +23,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val users = userDao.getAllUsers().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val currentUserId = settings.currentUserId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), -1L)
+    val aiPrivacyAccepted = settings.aiPrivacyAccepted.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val currentUser: StateFlow<User?> = combine(users, currentUserId) { userList, id ->
         userList.find { it.id == id } ?: userList.firstOrNull()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
+        viewModelScope.launch { settings.migrateLegacyApiKey() }
         viewModelScope.launch {
             combine(users, currentUserId) { userList, id ->
-                if (id == -1L && userList.isNotEmpty()) {
+                if (userList.isNotEmpty() && userList.none { it.id == id }) {
                     settings.setCurrentUserId(userList.first().id)
                 }
             }.collect()
@@ -49,16 +55,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addUser(name: String, gender: String, birthYear: Int, birthMonth: Int, avatarColor: Int, onDone: (Long) -> Unit = {}) {
+        if (HealthValidation.validateUser(name, birthYear, birthMonth) != null) return
         viewModelScope.launch {
-            val id = userDao.insert(User(name = name, gender = gender, birthYear = birthYear, birthMonth = birthMonth, avatarColor = avatarColor))
+            val id = userDao.insert(User(name = name.trim(), gender = gender, birthYear = birthYear, birthMonth = birthMonth, avatarColor = avatarColor))
             settings.setCurrentUserId(id)
             onDone(id)
         }
     }
 
     fun updateUser(user: User) {
+        if (HealthValidation.validateUser(user.name, user.birthYear, user.birthMonth) != null) return
         viewModelScope.launch {
-            userDao.update(user)
+            userDao.update(user.copy(name = user.name.trim()))
         }
     }
 
@@ -74,15 +82,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addRecord(userId: Long, type: String, value: Double, date: String, measureTime: String) {
+    fun addRecord(
+        userId: Long,
+        type: String,
+        value: Double?,
+        date: String,
+        time: String,
+        measureTime: String,
+        onResult: (String?) -> Unit = {}
+    ) {
+        val error = HealthValidation.validateRecord(type, value, date, time)
+        if (error != null) {
+            onResult(error)
+            return
+        }
+        val measuredAt = HealthValidation.toEpochMillis(date, time)
+        if (measuredAt == null || value == null) {
+            onResult("请输入有效的日期和时间")
+            return
+        }
         viewModelScope.launch {
-            recordDao.insert(HealthRecord(userId = userId, type = type, value = value, date = date, measureTime = measureTime))
+            recordDao.insert(HealthRecord(userId = userId, type = type, value = value, date = date, measureTime = measureTime, measuredAt = measuredAt))
+            onResult(null)
         }
     }
 
-    fun updateRecord(record: HealthRecord) {
+    fun updateRecord(record: HealthRecord, onResult: (String?) -> Unit = {}) {
+        val localDateTime = Instant.ofEpochMilli(record.measuredAt).atZone(ZoneId.systemDefault()).toLocalDateTime()
+        val date = localDateTime.toLocalDate().toString()
+        val time = localDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+        val error = HealthValidation.validateRecord(record.type, record.value, date, time)
+        if (error != null) {
+            onResult(error)
+            return
+        }
         viewModelScope.launch {
-            recordDao.update(record)
+            recordDao.update(record.copy(date = date))
+            onResult(null)
         }
     }
 
@@ -92,8 +128,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveApiConfig(url: String, key: String, model: String) {
-        viewModelScope.launch { settings.setApiConfig(url, key, model) }
+    fun saveApiConfig(url: String, key: String, model: String, onResult: (String?) -> Unit = {}) {
+        val normalizedUrl = sanitizeUrl(url.trim())
+        val validUrl = runCatching {
+            val uri = URI(normalizedUrl)
+            uri.scheme == "https" && !uri.host.isNullOrBlank()
+        }.getOrDefault(false)
+        val error = when {
+            !validUrl -> "请输入有效的 HTTPS API 地址"
+            key.isBlank() -> "请输入 API Key"
+            model.isBlank() -> "请输入模型名称"
+            else -> null
+        }
+        if (error != null) {
+            onResult(error)
+            return
+        }
+        viewModelScope.launch {
+            settings.setApiConfig(normalizedUrl, key, model.trim())
+            onResult(null)
+        }
+    }
+
+    fun setAiPrivacyAccepted(accepted: Boolean, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            settings.setAiPrivacyAccepted(accepted)
+            onDone()
+        }
     }
 
     val apiUrl = settings.apiUrl.stateIn(viewModelScope, SharingStarted.Eagerly, "https://api.siliconflow.cn/v1/chat/completions")
@@ -136,6 +197,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _analysisResult.value = "请先在左上角设置大模型API配置"
                     return@launch
                 }
+                if (!aiPrivacyAccepted.value) {
+                    _analysisResult.value = "请先阅读并同意 AI 数据处理说明"
+                    return@launch
+                }
 
                 // Fetch only the 20 most recent records directly — much faster than loading all + takeLast(20)
                 val records = recordDao.getLatestRecordsForUser(user.id, 20).reversed()
@@ -144,8 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val now = LocalDate.now()
-                val age = now.year - user.birthYear
+                val age = HealthValidation.age(user.birthYear, user.birthMonth)
                 val gender = user.gender
 
                 val sb = StringBuilder()
@@ -154,7 +218,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 records.forEach { r ->
                     val typeName = HealthUtils.getTypeName(r.type)
                     val unit = HealthUtils.getUnit(r.type)
-                    sb.append("${r.date} $typeName ${r.value}${unit}\n")
+                    val measuredTime = Instant.ofEpochMilli(r.measuredAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                    sb.append("$measuredTime ${r.measureTime} $typeName ${r.value}${unit}\n")
                 }
                 sb.append("\n请开心地告诉他/她：1）数据整体趋势如何；2）最近变化如何；3）最重要的一条生活建议；4）如有异常请用**加粗**温和提醒。")
 
@@ -220,7 +285,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val typeName = HealthUtils.getTypeName(type)
         val unit = HealthUtils.getUnit(type)
         val level = HealthUtils.getLevel(type, value, gender, measureTime)
-        val levelText = if (level == HealthLevel.HIGH) "偏高" else "明显偏高"
+        val levelText = when (level) {
+            HealthLevel.VERY_LOW -> "明显偏低"
+            HealthLevel.LOW -> "偏低"
+            HealthLevel.HIGH -> "偏高"
+            HealthLevel.VERY_HIGH -> "明显偏高"
+            HealthLevel.NORMAL -> "在当前参考范围内"
+        }
         val timeHint = if (type == "blood_sugar") "，${measureTime}测量" else ""
         val prompt = "${gender}性${age}岁，${typeName}${String.format("%.1f", value)}${unit}${timeHint}，${levelText}。请两段简要当面说明：第一段说数值意义；第二段给**最重要一条**建议。温暖鼓励，可加表情，80字以内。"
 
@@ -232,6 +303,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (key.isBlank()) {
                     _quickAdviceResult.value = "请先配置大模型API"
+                    return@launch
+                }
+                if (!aiPrivacyAccepted.value) {
+                    _quickAdviceResult.value = "请先阅读并同意 AI 数据处理说明"
                     return@launch
                 }
 
@@ -277,4 +352,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearQuickAdvice() {
         _quickAdviceResult.value = null
     }
+
+    fun exportCsv(user: User, onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            val rows = recordDao.getAllRecordsForUser(user.id)
+            val csv = buildString {
+                append("用户,性别,测量时间,类别,测量时段,数值,单位\n")
+                rows.forEach { record ->
+                    val measured = Instant.ofEpochMilli(record.measuredAt).atZone(ZoneId.systemDefault()).format(formatter)
+                    val cells = listOf(
+                        user.name,
+                        user.gender,
+                        measured,
+                        HealthUtils.getTypeName(record.type),
+                        record.measureTime,
+                        record.value.toString(),
+                        HealthUtils.getUnit(record.type)
+                    )
+                    append(cells.joinToString(",") { csvCell(it) }).append('\n')
+                }
+            }
+            onReady(csv)
+        }
+    }
+
+    private fun csvCell(value: String): String = "\"${value.replace("\"", "\"\"")}\""
 }

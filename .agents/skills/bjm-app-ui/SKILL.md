@@ -19,7 +19,7 @@ description: "把品牌 VI 与设计系统实例化到目标 app：复制 docs/a
 2. **复制就位**：`Theme.kt.template` → `app/src/main/java/<包名>/ui/theme/Theme.kt`；各组件模板去 `.template` 后缀 → `ui/components/`；`brand-tokens.kt.template` → `ui/theme/BrandTokens.kt`。全部 `{{package}}` 占位替换为目标 app 根包名。
 3. **对齐品牌**：`Theme.kt` 的色值改读 `BrandColors`（与 brand-vi.md 逐值一致）；发现 token 与手册不一致时以手册为准并回报。
 4. **界面迁移**：新界面只使用 `App*` 组件；组件不满足的场景先回报，不在界面代码里硬编码样式绕过。
-5. **构建验证收口**：`python tools/app_check.py .` 修正全部 ERROR，再执行 `.\gradlew.bat testDebugUnitTest assembleDebug` 记录真实退出状态；界面相关改动按 `bjm-app-device-test` 执行真机验证；**构建与真机验证完成前不得声称完成**。
+5. **构建验证收口**：`python tools/app_check.py .` 修正全部 ERROR（含 `design-system-templates` WARN 逐条确认），再执行 `.\gradlew.bat testDebugUnitTest assembleDebug` 记录真实退出状态；界面相关改动按 `bjm-app-device-test` 执行真机验证；**构建与真机验证完成前不得声称完成**。收口时把 `docs/android/design-system/*.kt.template` 与 app 内实例逐字比对（替换 `{{package}}` 后），新增参数、API 修复与布局调整必须先回写模板再实例化，避免模板漂移。
 
 ## 使用约束
 

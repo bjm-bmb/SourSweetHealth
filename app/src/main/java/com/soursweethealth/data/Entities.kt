@@ -20,7 +20,10 @@ data class User(
         childColumns = ["userId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index("userId")]
+    indices = [
+        Index("userId"),
+        Index(value = ["userId", "type", "measuredAt"])
+    ]
 )
 data class HealthRecord(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -29,5 +32,6 @@ data class HealthRecord(
     val value: Double,
     val date: String, // yyyy-MM-dd
     val measureTime: String, // 起床后, 餐后1小时, 餐后2小时, 其他时间
+    val measuredAt: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis()
 )

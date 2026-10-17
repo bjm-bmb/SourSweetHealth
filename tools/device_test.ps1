@@ -8,6 +8,16 @@
   然后安装调试包、启动主界面、检查进程存活与崩溃日志；若存在 app\src\androidTest
   则继续执行 connectedDebugAndroidTest 做 UI 断言。证据写入 -ArtifactsDir。
 
+  交互级复核（-UiSteps）用于界面改动的必测路径：按 uiautomator 文本定位控件并点击，
+  逐步截图并断言关键文本存在。冒烟通过不等于界面正确，涉及主题/形状/列表布局/
+  设置项/对话框的改动必须给出 -UiSteps。
+
+  步骤语法（分号分隔）：
+    tap:控件文本      按 text 或 content-desc 精确匹配后点击其中心
+    assert:文本        当前界面必须包含该文本
+    wait:毫秒          等待，默认无需使用
+    shot:名称          立即截图到 <ArtifactsDir>\step-<序号>-<名称>.png
+
   退出码：0 = PASS，1 = FAIL，2 = BLOCKED（环境缺失或设备未连接）。
 
 .EXAMPLE
@@ -15,6 +25,9 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . -Serial R58M12345AB -WaitSeconds 600
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . -UiSteps "tap:设置;assert:自动涌现;tap:自动涌现;assert:每天早上 6 点;shot:surge-dialog"
 #>
 [CmdletBinding()]
 param(
@@ -22,6 +35,8 @@ param(
     [string]$Serial = '',
     [string]$ApkPath = '',
     [string]$ArtifactsDir = '',
+    [Alias('Steps')]
+[string[]]$UiSteps = @(),
     [switch]$SkipBuild,
     [switch]$SkipInstrumented,
     [int]$WaitSeconds = 300,
@@ -321,6 +336,93 @@ if ($SkipInstrumented) {
     Add-Result 'UI 测试' 'PASS' 'connectedDebugAndroidTest 退出码 0'
 }
 
+# ---------------------------------------------------------------- 交互级复核
+if ($UiSteps.Count -gt 0) {
+    Write-Step '交互级真机复核'
+    $stepList = @()
+    foreach ($s in $UiSteps) {
+        $stepList += @($s -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    }
+
+    function Get-UiDump {
+        $remote = '/sdcard/bjm_ui_dump.xml'
+        $local = Join-Path $script:artifacts ('ui-' + (Get-Date -Format 'HHmmssfff') + '.xml')
+        & $adb -s $selected shell uiautomator dump $remote 2>&1 | Out-Null
+        & $adb -s $selected pull $remote $local 2>&1 | Out-Null
+        & $adb -s $selected shell rm -f $remote | Out-Null
+        if (Test-Path -LiteralPath $local) { return (Get-Content -LiteralPath $local -Raw -Encoding UTF8) }
+        return ''
+    }
+
+    function Find-UiNode([string]$xml, [string]$needle) {
+        $escaped = [regex]::Escape($needle)
+        foreach ($m in [regex]::Matches($xml, '<node\b[^>]*>')) {
+            $tag = $m.Value
+            if ($tag -notmatch ('(?:text|content-desc)="' + $escaped + '"')) { continue }
+            $b = [regex]::Match($tag, 'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
+            if (-not $b.Success) { continue }
+            return @{
+                X = [int]((([int]$b.Groups[1].Value) + ([int]$b.Groups[3].Value)) / 2)
+                Y = [int]((([int]$b.Groups[2].Value) + ([int]$b.Groups[4].Value)) / 2)
+                Bounds = $b.Value
+            }
+        }
+        return $null
+    }
+
+    function Save-UiShot([string]$name) {
+        $remote = '/sdcard/bjm_step.png'
+        & $adb -s $selected shell screencap -p $remote | Out-Null
+        $safe = ($name -replace '[\\/:*?"<>|\s]+', '-')
+        $local = Join-Path $script:artifacts ("step-$script:stepSeq-$safe.png")
+        & $adb -s $selected pull $remote $local 2>&1 | Out-Null
+        & $adb -s $selected shell rm -f $remote | Out-Null
+        if (Test-Path -LiteralPath $local) {
+            [void]$script:artifactFiles.Add($local)
+            return $local
+        }
+        return ''
+    }
+
+    $script:stepSeq = 0
+    foreach ($step in $stepList) {
+        $script:stepSeq++
+        if ($step -match '^(?i)tap[:：]\s*(.+)$') {
+            $target = $matches[1].Trim()
+            $node = Find-UiNode (Get-UiDump) $target
+            if ($null -eq $node) {
+                Add-Result '交互复核' 'FAIL' "第 $script:stepSeq 步：未找到可点击控件「$target」"
+                Complete-Run 'FAIL' "交互步骤失败：找不到控件「$target」" 1
+            }
+            & $adb -s $selected shell input tap $node.X $node.Y | Out-Null
+            Start-Sleep -Milliseconds 900
+            Save-UiShot ("tap-" + $target) | Out-Null
+        }
+        elseif ($step -match '^(?i)assert[:：]\s*(.+)$') {
+            $expected = $matches[1].Trim()
+            $xml = Get-UiDump
+            if ($xml -notmatch ('(?:text|content-desc)="' + [regex]::Escape($expected) + '"')) {
+                Save-UiShot ("assert-fail-" + $expected) | Out-Null
+                Add-Result '交互复核' 'FAIL' "第 $script:stepSeq 步：界面缺少「$expected」"
+                Complete-Run 'FAIL' "交互断言失败：界面缺少「$expected」，截图见 step-*" 1
+            }
+        }
+        elseif ($step -match '^(?i)wait[:：]\s*(\d+)$') {
+            Start-Sleep -Milliseconds ([int]$matches[1])
+        }
+        elseif ($step -match '^(?i)shot[:：]\s*(.+)$') {
+            Save-UiShot $matches[1].Trim() | Out-Null
+        }
+        else {
+            Add-Result '交互复核' 'FAIL' "第 $script:stepSeq 步无法解析：$step"
+            Complete-Run 'FAIL' "交互步骤语法错误：$step" 1
+        }
+    }
+    Add-Result '交互复核' 'PASS' ("完成 {0} 步交互断言，截图见 step-*.png" -f $stepList.Count)
+} else {
+    Add-Result '交互复核' 'SKIP' '未提供 -UiSteps（界面改动必须提供必点路径，见 LRN-0012）'
+}
+
 # ---------------------------------------------------------------- 崩溃检查
 Write-Step '崩溃与 ANR 检查'
 $logcatOutput = (& $adb -s $selected logcat -d -t 20000 -v threadtime 2>&1 | Out-String)
@@ -353,3 +455,4 @@ if (Test-Path -LiteralPath $localShot) {
 }
 
 Complete-Run 'PASS' '真机验证通过（安装、启动、进程存活、无崩溃）' 0
+

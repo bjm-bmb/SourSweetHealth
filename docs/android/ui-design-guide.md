@@ -78,6 +78,7 @@
 
 - 设计 token 集中在 `ui/theme/`：`Color.kt`（色板常量）、`Type.kt`（6 级字阶）、`Shape.kt`（圆角体系）、`Theme.kt`（light/dark 双方案）；组件一律读 `MaterialTheme`，禁止在界面代码里写死颜色值/字号/圆角。
 - 间距常量集中在 `Dimens.kt` 或 theme 扩展，界面只引用语义名（`Spacing.pagePadding`）。
+- 系统栏图标必须随明暗主题适配：状态栏与导航栏分别设置 `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars`（`WindowCompat` + `SideEffect`），禁止只设状态栏；浅色模式下系统导航图标对导航栏背景对比度应 ≥ 3:1。
 
 ### View/XML（既有项目）
 
@@ -94,4 +95,5 @@
 7. 界面代码无硬编码颜色/字号/圆角（Compose 读 MaterialTheme，XML 用资源引用）；
 8. 深色模式可用且经过设计（非反色错乱）；
 9. 空状态、加载态简洁（一句文案/骨架屏）；
-10. 动效 150–300ms，无花哨动画。
+10. 动效 150–300ms，无花哨动画；
+11. 浅色/深色下状态栏与导航栏图标均清晰可见（导航栏对比度 ≥ 3:1），系统栏背景与 App 背景协调。

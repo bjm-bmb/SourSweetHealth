@@ -1,11 +1,12 @@
 package com.soursweethealth.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -20,6 +21,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -32,17 +34,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.shadow
 import com.soursweethealth.data.*
 import com.soursweethealth.ui.MainViewModel
 import com.soursweethealth.ui.theme.*
 import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +68,10 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
     // Edit record dialog state
     var editingRecord by remember { mutableStateOf<HealthRecord?>(null) }
     var editValueText by remember { mutableStateOf("") }
+    var editDateText by remember { mutableStateOf("") }
+    var editTimeText by remember { mutableStateOf("") }
+    var editMeasureTime by remember { mutableStateOf("") }
+    var editError by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // Edit record dialog
@@ -73,11 +80,26 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
             onDismissRequest = { editingRecord = null },
             containerColor = MaterialTheme.colorScheme.background,
             title = {
-                Text("修改${HealthUtils.getTypeName(record.type)}记录", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("修改${HealthUtils.getTypeName(record.type)}记录", style = MaterialTheme.typography.titleMedium)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("日期：${record.date}  ${record.measureTime}", fontSize = 14.sp, color = Color(0xFF888888))
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        OutlinedTextField(
+                            value = editDateText,
+                            onValueChange = { editDateText = it; editError = null },
+                            label = { Text("日期") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1.3f)
+                        )
+                        OutlinedTextField(
+                            value = editTimeText,
+                            onValueChange = { editTimeText = it.filter { c -> c.isDigit() || c == ':' }.take(5); editError = null },
+                            label = { Text("时间") },
+                            singleLine = true,
+                            modifier = Modifier.weight(0.8f)
+                        )
+                    }
                     OutlinedTextField(
                         value = editValueText,
                         onValueChange = { input ->
@@ -92,30 +114,41 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Text("测量时段", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HealthUtils.getMeasureTimeOptions(record.type).forEach { option ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(Spacing.touchTargetMin).clickable { editMeasureTime = option },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = editMeasureTime == option, onClick = { editMeasureTime = option })
+                            Text(option, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    editError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (showDeleteConfirm) {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = HealthRed.copy(alpha = 0.08f)),
-                            shape = RoundedCornerShape(8.dp)
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            shape = MaterialTheme.shapes.small
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("确定要删除这条记录吗？", fontSize = 14.sp, color = HealthRed)
-                                Spacer(Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(modifier = Modifier.padding(Spacing.md)) {
+                                Text("确定要删除这条记录吗？", style = MaterialTheme.typography.bodySmall, color = HealthRed)
+                                Spacer(Modifier.height(Spacing.sm))
+                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     OutlinedButton(
                                         onClick = { showDeleteConfirm = false },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) { Text("取消", fontSize = 14.sp) }
+                                        shape = MaterialTheme.shapes.small
+                                    ) { Text("取消", style = MaterialTheme.typography.bodySmall) }
                                     Button(
                                         onClick = {
                                             viewModel.deleteRecord(record)
                                             showDeleteConfirm = false
                                             editingRecord = null
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = HealthRed),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) { Text("确认删除", fontSize = 14.sp) }
+                                        shape = MaterialTheme.shapes.small
+                                    ) { Text("确认删除", style = MaterialTheme.typography.bodySmall) }
                                 }
                             }
                         }
@@ -124,9 +157,9 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                             onClick = { showDeleteConfirm = true },
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, tint = HealthRed, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("删除此记录", color = HealthRed, fontSize = 14.sp)
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = HealthRed, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("删除此记录", color = HealthRed, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -134,14 +167,21 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
             confirmButton = {
                 TextButton(onClick = {
                     val newVal = editValueText.toDoubleOrNull()
-                    if (newVal != null) {
-                        viewModel.updateRecord(record.copy(value = newVal))
-                        editingRecord = null
+                    val error = HealthValidation.validateRecord(record.type, newVal, editDateText, editTimeText)
+                    val measuredAt = HealthValidation.toEpochMillis(editDateText, editTimeText)
+                    if (error != null || measuredAt == null) {
+                        editError = error ?: "请输入有效的日期和时间"
+                    } else {
+                        viewModel.updateRecord(
+                            record.copy(value = newVal!!, date = editDateText, measureTime = editMeasureTime, measuredAt = measuredAt)
+                        ) { updateError ->
+                            if (updateError == null) editingRecord = null else editError = updateError
+                        }
                     }
-                }) { Text("保存", fontSize = 16.sp) }
+                }) { Text("保存", style = MaterialTheme.typography.bodyLarge) }
             },
             dismissButton = {
-                TextButton(onClick = { editingRecord = null }) { Text("取消", fontSize = 16.sp) }
+                TextButton(onClick = { editingRecord = null }) { Text("取消", style = MaterialTheme.typography.bodyLarge) }
             }
         )
     }
@@ -149,42 +189,44 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
     // Date pickers for custom range
     if (showStartPicker) {
         val state = rememberDatePickerState(
-            initialSelectedDateMillis = customStartDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            initialSelectedDateMillis = customStartDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         )
         DatePickerDialog(
             onDismissRequest = { showStartPicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     state.selectedDateMillis?.let {
-                        customStartDate = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                        customStartDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                        if (customStartDate.isAfter(customEndDate)) customEndDate = customStartDate
                     }
                     showStartPicker = false
                 }) { Text("确定") }
             },
             dismissButton = { TextButton(onClick = { showStartPicker = false }) { Text("取消") } },
-            colors = DatePickerDefaults.colors(containerColor = Color.White),
+            colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
             tonalElevation = 0.dp
-        ) { DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = Color.White)) }
+        ) { DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)) }
     }
 
     if (showEndPicker) {
         val state = rememberDatePickerState(
-            initialSelectedDateMillis = customEndDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            initialSelectedDateMillis = customEndDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         )
         DatePickerDialog(
             onDismissRequest = { showEndPicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     state.selectedDateMillis?.let {
-                        customEndDate = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                        customEndDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                        if (customEndDate.isBefore(customStartDate)) customStartDate = customEndDate
                     }
                     showEndPicker = false
                 }) { Text("确定") }
             },
             dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("取消") } },
-            colors = DatePickerDefaults.colors(containerColor = Color.White),
+            colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
             tonalElevation = 0.dp
-        ) { DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = Color.White)) }
+        ) { DatePicker(state = state, colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)) }
     }
 
     val (startDate, endDate) = when (selectedRange) {
@@ -204,38 +246,38 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
     val allRecords by viewModel.getRecordsByType(user.id, selectedType).collectAsState(initial = emptyList())
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text("趋势", color = Color(0xFF999999), fontSize = 14.sp)
-        Spacer(Modifier.height(6.dp))
+        Text("趋势", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(Spacing.sm))
         Card(
-            modifier = Modifier.fillMaxWidth().weight(1f).shadow(elevation = 4.dp, shape = RoundedCornerShape(12.dp), ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000)),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
                 // Type selector + MeasureTime dropdown
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     TypeChip("血糖", selectedType == "blood_sugar") { selectedType = "blood_sugar" }
                     TypeChip("尿酸", selectedType == "uric_acid") { selectedType = "uric_acid" }
 
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(Spacing.xs))
 
                     // MeasureTime dropdown
                     Box {
                         Surface(
                             onClick = { measureTimeDropdownExpanded = true },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedMeasureTime != "全部") LightBlue100 else Color(0xFFF5F5F5),
-                            contentColor = if (selectedMeasureTime != "全部") LightBlue700 else Color(0xFF444444)
+                            shape = MaterialTheme.shapes.small,
+                            color = if (selectedMeasureTime != "全部") Accent else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (selectedMeasureTime != "全部") OnAccent else MaterialTheme.colorScheme.onSurfaceVariant
                         ) {
                             Text(
                                 selectedMeasureTime,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                fontSize = 13.sp,
-                                fontWeight = if (selectedMeasureTime != "全部") FontWeight.Bold else FontWeight.Medium
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selectedMeasureTime != "全部") FontWeight.Medium else FontWeight.Normal
                             )
                         }
                         DropdownMenu(
@@ -248,9 +290,9 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                                     text = {
                                         Text(
                                             option,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (option == selectedMeasureTime) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (option == selectedMeasureTime) LightBlue700 else Color.Unspecified
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (option == selectedMeasureTime) FontWeight.Medium else FontWeight.Normal,
+                                            color = if (option == selectedMeasureTime) OnAccent else Color.Unspecified
                                         )
                                     },
                                     onClick = {
@@ -263,10 +305,10 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
                 // Range selector
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 listOf("7d" to "7天", "30d" to "30天", "3m" to "3个月").forEach { (key, label) ->
                     RangeChip(label, selectedRange == key) {
                         selectedRange = key
@@ -287,33 +329,33 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
 
             // Custom date range with calendar pickers
             if (selectedRange == "custom" && showCustomPickers) {
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(
                         onClick = { showStartPicker = true },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        shape = MaterialTheme.shapes.small,
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs)
                     ) {
-                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(customStartDate.format(DateTimeFormatter.ofPattern("MM-dd")), fontSize = 13.sp)
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text(customStartDate.format(DateTimeFormatter.ofPattern("MM-dd")), style = MaterialTheme.typography.bodySmall)
                     }
-                    Text("至", fontSize = 14.sp, color = Color(0xFF999999))
+                    Text("至", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedButton(
                         onClick = { showEndPicker = true },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        shape = MaterialTheme.shapes.small,
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs)
                     ) {
-                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(customEndDate.format(DateTimeFormatter.ofPattern("MM-dd")), fontSize = 13.sp)
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text(customEndDate.format(DateTimeFormatter.ofPattern("MM-dd")), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(Spacing.xs))
 
             // Chart area — use filtered records for range chips, allRecords for "查看全部"
             // getRecordsByDateRange returns ASC (oldest→newest) — already correct order for the chart
@@ -322,12 +364,20 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                 val base = if (selectedRange == "all") allRecords.reversed() else records
                 if (selectedMeasureTime == "全部") base else base.filter { it.measureTime == selectedMeasureTime }
             }
-            val effectiveMeasureTime = if (selectedMeasureTime == "全部") "空腹（起床后）" else selectedMeasureTime
+            val effectiveMeasureTime = if (selectedMeasureTime == "全部" && selectedType == "blood_sugar") null else selectedMeasureTime
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 if (allRecords.isEmpty()) {
-                    Text("暂无${HealthUtils.getTypeName(selectedType)}记录", color = Color(0xFFBBBBBB), fontSize = 15.sp)
+                    Text(
+                        "暂无${HealthUtils.getTypeName(selectedType)}记录",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 } else if (chartRecords.isEmpty()) {
-                    Text("该时间段暂无${HealthUtils.getTypeName(selectedType)}记录", color = Color(0xFFBBBBBB), fontSize = 15.sp)
+                    Text(
+                        "该时间段暂无${HealthUtils.getTypeName(selectedType)}记录",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 } else {
                     TrendChart(
                         records = remember(chartRecords) { chartRecords },
@@ -336,6 +386,11 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                         measureTime = effectiveMeasureTime,
                         onEditRecord = { record ->
                             editValueText = if (selectedType == "uric_acid") String.format("%.0f", record.value) else String.format("%.1f", record.value)
+                            val local = Instant.ofEpochMilli(record.measuredAt).atZone(ZoneId.systemDefault())
+                            editDateText = local.toLocalDate().format(dateFormatter)
+                            editTimeText = local.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
+                            editMeasureTime = record.measureTime
+                            editError = null
                             showDeleteConfirm = false
                             editingRecord = record
                         }
@@ -351,11 +406,16 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
 fun TypeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) LightBlue600 else Color(0xFFE0E0E0),
-        contentColor = if (selected) Color.White else Color(0xFF222222)
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) Accent else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (selected) OnAccent else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -363,26 +423,39 @@ fun TypeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = if (selected) LightBlue100 else Color.Transparent,
-        contentColor = if (selected) LightBlue700 else Color(0xFF444444)
+        shape = MaterialTheme.shapes.small,
+        color = if (selected) Accent else Color.Transparent,
+        contentColor = if (selected) OnAccent else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
-        Text(label, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+        )
     }
 }
 
 @Composable
-fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measureTime: String = "空腹（起床后）", onEditRecord: (HealthRecord) -> Unit = {}) {
+fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measureTime: String? = "空腹（起床后）", onEditRecord: (HealthRecord) -> Unit = {}) {
     var selectedPoint by remember(records) { mutableStateOf<Int?>(null) }
 
     val tooltipRecord = selectedPoint?.let { records.getOrNull(it) }
-    val (thresholdNormal, thresholdHigh) = HealthUtils.getThresholds(type, gender, measureTime)
+    val thresholds = measureTime?.let { HealthUtils.getThresholds(type, gender, it) }
+
+    // 图表绘制所用颜色与字号全部取自主题 token
+    val chartColors = LocalChartColors.current
+    val gridColor = chartColors.grid
+    val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val pointInnerColor = MaterialTheme.colorScheme.surface
+    val lineColor = chartColors.line
+    val chartLabelStyle = MaterialTheme.typography.labelSmall
 
     // Minimum spacing between points in px
     val minPointSpacing = 60f
 
     // Track canvas width so we can auto-scroll to the rightmost (most recent) data
-    var canvasWidth by remember { mutableStateOf(0f) }
+    var canvasWidth by remember { mutableFloatStateOf(0f) }
     // scrollOffset is keyed ONLY on records — not on canvasWidth.
     // If canvasWidth were also a key, every onSizeChanged would create a NEW MutableFloatState
     // while the pointerInput coroutine (keyed on records) still holds a reference to the OLD one,
@@ -405,6 +478,9 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
+                .semantics {
+                    contentDescription = "${HealthUtils.getTypeName(type)}趋势图，共${records.size}条记录。长按数据点可编辑。"
+                }
                 .onSizeChanged { canvasWidth = it.width.toFloat() }
                 .pointerInput(records) {
                     // Single gesture handler: distinguishes tap/longpress from drag
@@ -420,8 +496,6 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
                         do {
                             val event = awaitPointerEvent()
                             val pointer = event.changes.firstOrNull() ?: break
-                            val elapsed = System.currentTimeMillis() - downTime
-
                             if (!isDragging) {
                                 val delta = pointer.position - dragStart
                                 // If moved more than 10px, it's a drag
@@ -475,8 +549,8 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
             val dataMin = values.minOrNull() ?: 0.0
             val dataMax = values.maxOrNull() ?: 10.0
             // Extend range to include thresholds for proper zone display
-            val minVal = minOf(dataMin * 0.85, thresholdNormal * 0.85)
-            val maxVal = maxOf(dataMax * 1.1, thresholdHigh * 1.15)
+            val minVal = thresholds?.let { minOf(dataMin * 0.85, it.first * 0.85) } ?: (dataMin * 0.85)
+            val maxVal = thresholds?.let { maxOf(dataMax * 1.1, it.second * 1.15) } ?: (dataMax * 1.15)
             val range = if (maxVal - minVal < 0.1) 1.0 else maxVal - minVal
 
             val pointCount = records.size
@@ -484,8 +558,6 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
             // Calculate content width: use minPointSpacing if it's wider than chart
             val naturalSpacing = if (pointCount <= 1) chartWidth else chartWidth / (pointCount - 1)
             val useSpacing = maxOf(naturalSpacing, minPointSpacing)
-            val totalContentWidth = if (pointCount <= 1) chartWidth else (pointCount - 1) * useSpacing
-
             fun xForIndex(i: Int): Float {
                 return if (pointCount <= 1) paddingLeft + chartWidth / 2
                 else paddingLeft + i * useSpacing - scrollOffset
@@ -493,8 +565,8 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
             fun yForValue(v: Double): Float = paddingTop + ((maxVal - v) / range * chartHeight).toFloat()
 
             // Draw colored zones (green = normal, yellow = high, red = very high)
-            val yNormal = yForValue(thresholdNormal)
-            val yHigh = yForValue(thresholdHigh)
+            val yNormal = thresholds?.let { yForValue(it.first) }
+            val yHigh = thresholds?.let { yForValue(it.second) }
             val chartBottom = paddingTop + chartHeight
             val chartTop = paddingTop
 
@@ -505,25 +577,25 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
             )
 
             // Green zone: from bottom to normal threshold
-            if (yNormal < chartBottom) {
+            if (yNormal != null && yNormal < chartBottom) {
                 drawRect(
-                    color = HealthGreen.copy(alpha = 0.08f),
+                    color = HealthGreen.copy(alpha = 0.10f),
                     topLeft = Offset(paddingLeft, yNormal),
                     size = Size(chartWidth, chartBottom - yNormal)
                 )
             }
             // Yellow zone: from normal to high threshold
-            if (yHigh < yNormal) {
+            if (yHigh != null && yNormal != null && yHigh < yNormal) {
                 drawRect(
-                    color = HealthYellow.copy(alpha = 0.10f),
+                    color = HealthYellow.copy(alpha = 0.16f),
                     topLeft = Offset(paddingLeft, yHigh),
                     size = Size(chartWidth, yNormal - yHigh)
                 )
             }
             // Red zone: from high threshold to top
-            if (yHigh > chartTop) {
+            if (yHigh != null && yHigh > chartTop) {
                 drawRect(
-                    color = HealthRed.copy(alpha = 0.08f),
+                    color = HealthRed.copy(alpha = 0.10f),
                     topLeft = Offset(paddingLeft, chartTop),
                     size = Size(chartWidth, yHigh - chartTop)
                 )
@@ -531,22 +603,24 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
 
             // Draw threshold lines
             val thinDash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-            drawLine(color = HealthGreen.copy(alpha = 0.5f), start = Offset(paddingLeft, yNormal), end = Offset(paddingLeft + chartWidth, yNormal), strokeWidth = 1f, pathEffect = thinDash)
-            drawLine(color = HealthRed.copy(alpha = 0.5f), start = Offset(paddingLeft, yHigh), end = Offset(paddingLeft + chartWidth, yHigh), strokeWidth = 1f, pathEffect = thinDash)
+            if (yNormal != null && yHigh != null) {
+                drawLine(color = HealthGreen.copy(alpha = 0.5f), start = Offset(paddingLeft, yNormal), end = Offset(paddingLeft + chartWidth, yNormal), strokeWidth = 1.dp.toPx(), pathEffect = thinDash)
+                drawLine(color = HealthRed.copy(alpha = 0.5f), start = Offset(paddingLeft, yHigh), end = Offset(paddingLeft + chartWidth, yHigh), strokeWidth = 1.dp.toPx(), pathEffect = thinDash)
+            }
 
             // Draw grid lines (light)
-            val gridPaint = android.graphics.Paint().apply { color = android.graphics.Color.parseColor("#EEEEEE"); strokeWidth = 1f }
+            val gridPaint = android.graphics.Paint().apply { color = gridColor.toArgb(); strokeWidth = 1f }
             for (i in 0..4) {
                 val gy = paddingTop + chartHeight * i / 4
                 drawContext.canvas.nativeCanvas.drawLine(paddingLeft, gy, paddingLeft + chartWidth, gy, gridPaint)
             }
 
-            // Draw data lines (solid blue)
-            val blueLineColor = LightBlue600
+            // Draw data lines (accent)
+            val blueLineColor = lineColor
             for (i in 0 until pointCount - 1) {
                 val x1 = xForIndex(i); val y1 = yForValue(records[i].value)
                 val x2 = xForIndex(i + 1); val y2 = yForValue(records[i + 1].value)
-                drawLine(color = blueLineColor, start = Offset(x1, y1), end = Offset(x2, y2), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                drawLine(color = blueLineColor, start = Offset(x1, y1), end = Offset(x2, y2), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
             }
 
             // Restore clip before drawing points (so edge dots aren't clipped)
@@ -559,15 +633,16 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
                 if (x >= paddingLeft - 14f && x <= paddingLeft + chartWidth + 14f) {
                     val level = HealthUtils.getLevel(type, record.value, gender, record.measureTime)
                     val color = levelToColor(level)
-                    drawCircle(color = color, radius = if (i == selectedPoint) 16f else 12f, center = Offset(x, y))
-                    drawCircle(color = Color.White, radius = 5f, center = Offset(x, y))
+                    drawCircle(color = color, radius = if (i == selectedPoint) 5.5.dp.toPx() else 4.dp.toPx(), center = Offset(x, y))
+                    drawCircle(color = pointInnerColor, radius = 1.5.dp.toPx(), center = Offset(x, y))
                 }
             }
 
             // Draw labels (outside clip)
             drawContext.canvas.nativeCanvas.apply {
                 // Date labels - show first and last visible points (full date with year)
-                val datePaint = android.graphics.Paint().apply { textSize = 36f; this.color = android.graphics.Color.parseColor("#222222"); isAntiAlias = true; isFakeBoldText = true }
+                val labelTextSize = chartLabelStyle.fontSize.toPx()
+                val datePaint = android.graphics.Paint().apply { textSize = labelTextSize; this.color = axisLabelColor.toArgb(); isAntiAlias = true }
                 // Find first and last visible point
                 val firstVisible = records.indices.firstOrNull { xForIndex(it) >= paddingLeft }
                 val lastVisible = records.indices.lastOrNull { xForIndex(it) <= paddingLeft + chartWidth }
@@ -580,9 +655,9 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
                     drawText(records[lastVisible].date, paddingLeft + chartWidth, size.height - 2f, datePaint)
                 }
 
-                // Y-axis labels (bigger text)
+                // Y-axis labels
                 val yPaint = android.graphics.Paint().apply {
-                    textSize = 36f; this.color = android.graphics.Color.parseColor("#222222"); isAntiAlias = true; isFakeBoldText = true
+                    textSize = labelTextSize; this.color = axisLabelColor.toArgb(); isAntiAlias = true
                     textAlign = android.graphics.Paint.Align.RIGHT
                 }
                 for (i in 0..4) {
@@ -599,18 +674,36 @@ fun TrendChart(records: List<HealthRecord>, type: String, gender: String, measur
             val level = HealthUtils.getLevel(type, record.value, gender, record.measureTime)
             val color = levelToColor(level)
             val unit = HealthUtils.getUnit(type)
-            val warning = if (level == HealthLevel.VERY_HIGH) " ⚠️ 数值偏高" else ""
+            val warning = when (level) {
+                HealthLevel.VERY_LOW -> " ⚠️ 数值过低"
+                HealthLevel.LOW -> " ⚠️ 数值偏低"
+                HealthLevel.VERY_HIGH -> " ⚠️ 数值偏高"
+                else -> ""
+            }
 
             Card(
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.xs),
+                shape = MaterialTheme.shapes.small,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${record.date} ", fontSize = 13.sp, color = Color(0xFF999999))
-                    Text("${if (type == "uric_acid") String.format("%.0f", record.value) else String.format("%.1f", record.value)} $unit", fontWeight = FontWeight.Bold, color = color, fontSize = 15.sp)
-                    if (warning.isNotEmpty()) Text(warning, fontSize = 13.sp, color = HealthRed)
+                Row(
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val measured = Instant.ofEpochMilli(record.measuredAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
+                    Text(
+                        "$measured ${record.measureTime} ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "${if (type == "uric_acid") String.format("%.0f", record.value) else String.format("%.1f", record.value)} $unit",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = color
+                    )
+                    if (warning.isNotEmpty()) Text(warning, style = MaterialTheme.typography.bodySmall, color = HealthRed)
                 }
             }
         }
@@ -631,6 +724,8 @@ private fun findNearestPointWithScroll(x: Float, count: Int, width: Float, scrol
 
 private fun levelToColor(level: HealthLevel): Color {
     return when (level) {
+        HealthLevel.VERY_LOW -> HealthRed
+        HealthLevel.LOW -> HealthOrange
         HealthLevel.NORMAL -> HealthGreen
         HealthLevel.HIGH -> HealthYellow
         HealthLevel.VERY_HIGH -> HealthRed

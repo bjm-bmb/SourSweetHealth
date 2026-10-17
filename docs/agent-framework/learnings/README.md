@@ -18,6 +18,16 @@ docs/agent-framework/learnings/
 └── LRN-0001-<slug>.md # 经验条目
 ```
 
+## 分发到目标项目
+
+`install.ps1` 会把规范包内的**全部条目**（README、`_template.md` 与所有 `LRN-*.md`）同步到目标项目，让项目侧 Agent 能直接读到规范背后的经验依据：
+
+- 分发的条目追加两个字段：`distributed_from: app-agent`、`harness_id: <规范包内的编号>`；`id` 与文件名以目标项目实际分配到的编号为准。
+- 重装时按 `harness_id` 找到既有副本并刷新内容（规范包里更新了条目，项目侧会同步）。
+- 项目自有条目中与规范包条目**内容完全相同**（按内容指纹判定）的，会被接管为受管副本（补上两个标记字段、状态对齐规范包），避免同一经验在目录里出现两份。
+- 其余项目自有条目（无 `distributed_from` 标记）永不被覆盖；规范包条目若与项目条目 ID 冲突，自动改用下一个空闲编号，项目条目保持原样。
+- 同步后自动执行 `tools\harvest.ps1 -Action reindex`，`INDEX.md` 始终反映目录实际内容（`-Action validate` 可复核）。
+
 ## 条目格式
 
 ```markdown
@@ -80,7 +90,7 @@ targets: bjm-app-format; docs/android/app-coding-conventions.md
    powershell -ExecutionPolicy Bypass -File tools\harvest.ps1 -Action promote -Id LRN-0001 -Targets "bjm-app-format;docs/android/app-coding-conventions.md"
    ```
 
-5. **分发**：提示各使用中的项目重跑 `install.ps1` 同步；`VERSION` 按实际改动递增。
+5. **分发**：推送到 `main` 并递增 `VERSION`；使用中的项目下次打开时会由 `tools\harness_update.ps1`（`.vscode\tasks.json` 的 `runOn: folderOpen` 任务）自动同步，也可手工执行 `install.ps1`。
 
 ## 质量要求
 

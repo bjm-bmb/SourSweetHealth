@@ -13,7 +13,7 @@
 | `AppTopBar.kt.template` | `AppTopBar`（简约顶栏，17sp Medium 标题） | §三 区块标题字级 |
 | `AppEmptyState.kt.template` | `AppEmptyState`（一句文案 + 一个主按钮） | §七 空状态 |
 | `AppLoading.kt.template` | `AppLoadingBar`（细线进度）+ `AppSkeletonList`（骨架屏） | §六 加载态 |
-| `AppTextField.kt.template` | `AppTextField`（12dp 圆角描边输入框） | §五 形状体系 |
+| `AppTextField.kt.template` | `AppTextField`（12dp 圆角描边输入框，含只读/错误态/键盘类型/口令遮蔽/尾部插槽/辅助说明） | §五 形状体系 |
 | `AppSectionHeader.kt.template` | `AppSectionHeader`（17sp Medium 区块标题 + 可选尾部动作） | §三 字阶 |
 | `AppStat.kt.template` | `StatCard`（32sp 大数字 + 标签）、`AppProgressBar`（细线进度 + 百分比） | §三 展示字级、§六 |
 
@@ -27,5 +27,6 @@
 
 ## 使用约束
 
-- 组件只暴露文案、回调与插槽，不暴露样式参数（颜色/字号/圆角不可由调用方覆盖）——样式只能改 token，不能改调用点。
+- 组件只暴露文案、回调、行为参数与插槽（如键盘类型、只读、错误态、尾部图标），不暴露样式参数（颜色/字号/圆角不可由调用方覆盖）——样式只能改 token，不能改调用点。
+- 模板必须零编译警告：已废弃的 Compose API 不得留在模板里；模板缺陷会随实例化扩散到所有项目。
 - 新增组件先对照 ui-design-guide 的规范条目，加入本目录模板并更新本清单，再在各 app 使用；不在单个 app 里私造组件。

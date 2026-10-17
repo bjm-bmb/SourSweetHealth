@@ -31,6 +31,7 @@ description: "受理需求方的简要 Android 功能需求，自动起草并填
 - 「显式不做清单」必须起草：把概要需求未提及但容易过度发挥的页面、接口、第三方依赖与配置项列入，防止开发阶段扩范围。
 - 构建验证命令默认 `.\gradlew.bat testDebugUnitTest assembleDebug`（Windows），项目另有约定时在任务卡中显式改写。
 - 真机验证：任务卡必须写明是否需要（默认：涉及界面、导航、权限、启动流程的变化为「需要」），命令默认 `powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir .`，需要页面级断言时在任务卡「依赖变更」列出 androidTest 依赖。
+- 单测依赖核实：验收条件要求运行单测时，必须先核实测试依赖真实存在（检查 `app/build.gradle.kts` 的 `testImplementation`，或执行 `.\gradlew.bat :app:dependencies --configuration debugUnitTestCompileClasspath`）。缺失时在「依赖变更」写明新增测试依赖，并在「允许修改」中列入构建文件的单行变更；禁止把未验证的依赖写成「既有依赖」。
 - 安全边界章节按模板默认内容填写，不得删减。
 
 ## 最终交付物

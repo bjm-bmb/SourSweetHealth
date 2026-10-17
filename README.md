@@ -49,7 +49,9 @@ cd SourSweetHealth
 ./gradlew assembleDebug
 ```
 
-APK 输出路径：`app/build/outputs/apk/debug/SourSweetHealth.apk`
+APK 输出路径：`app/build/outputs/apk/debug/SourSweetHealth-<versionName>.apk`（当前为 `SourSweetHealth-1.0.1.apk`）。
+
+release 包签名读取仓库根目录的 `keystore.properties`（不入库）；文件缺失时回落 debug 签名，保证任意机器可构建。
 
 ### 配置 AI 分析功能（可选）
 

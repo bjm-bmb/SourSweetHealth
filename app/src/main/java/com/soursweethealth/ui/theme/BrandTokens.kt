@@ -1,0 +1,80 @@
+package com.soursweethealth.ui.theme
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/**
+ * 品牌 token：由 docs/brand/brand-vi.md 推导，bjm-app-brand 技能维护。
+ * 品牌：SourSweetHealth（酸甜健康），气质「清新 · 克制 · 可信」，主色清亮绿。
+ * 实例化：替换包名后，Theme 从本文件读品牌色；品牌变更只改本文件与 brand-vi.md。
+ */
+object BrandColors {
+    // ---- 主色（唯一强调色：清亮绿） ----
+    val accentLight = Color(0xFF1B7F52)
+    val accentDark = Color(0xFF5FCB96)
+    val onAccentLight = Color(0xFFFFFFFF)
+    val onAccentDark = Color(0xFF08251A)
+    val accentContainerLight = Color(0xFFE4F2EA)
+    val accentContainerDark = Color(0xFF1E3A2C)
+    val onAccentContainerLight = Color(0xFF0F4630)
+    val onAccentContainerDark = Color(0xFFB7E4CB)
+    // 图表线条：主色加深，保证细线与白底对比 ≥ 5:1
+    val accentStrongLight = Color(0xFF14603E)
+    val accentStrongDark = Color(0xFF7FD8AA)
+
+    // ---- 辅助中性色阶 ----
+    val textPrimaryLight = Color(0xFF1A1A1A)
+    val textPrimaryDark = Color(0xFFECEDEE)
+    val textSecondaryLight = Color(0xFF6E7377)
+    val textSecondaryDark = Color(0xFF9BA0A5)
+    val backgroundLight = Color(0xFFFAFAF9)
+    val backgroundDark = Color(0xFF16181A)
+    val surfaceLight = Color(0xFFFFFFFF)
+    val surfaceDark = Color(0xFF1E2124)
+    val outlineLight = Color(0xFFE3E1DD)
+    val outlineDark = Color(0xFF33373B)
+
+    // ---- 语义浊色（仅健康状态与错误态） ----
+    val successLight = Color(0xFF4E7A50)
+    val successDark = Color(0xFF8FB392)
+    val warningLight = Color(0xFFA96F1D)
+    val warningDark = Color(0xFFD6B25E)
+    val errorLight = Color(0xFFA83F35)
+    val errorDark = Color(0xFFD08C81)
+    val warningAltLight = Color(0xFFC25E33)
+    val warningAltDark = Color(0xFFE09A6E)
+}
+
+/** 品牌字阶：与 docs/android/ui-design-guide.md 的 6 级字阶完全对齐，不新增级别。 */
+object BrandTypeScale {
+    val display = 32.sp    // 大数字/展示，Medium，行高 40sp
+    val pageTitle = 22.sp  // 页面标题，Medium，行高 30sp
+    val sectionTitle = 17.sp // 区块标题，Medium，行高 24sp
+    val body = 15.sp       // 正文，Normal，行高 24sp
+    val caption = 13.sp    // 辅助说明，Normal，行高 20sp
+    val label = 11.sp      // 标签/角标，Medium，行高 16sp
+}
+
+/** 品牌间距：4dp 网格，与 ui-design-guide §四一致。 */
+object BrandSpacing {
+    val hairline = 2.dp  // 仅细分隔线与细线进度
+    val xs = 4.dp
+    val sm = 8.dp
+    val md = 12.dp
+    val lg = 16.dp
+    val xl = 20.dp
+    val xxl = 24.dp
+    val xxxl = 32.dp
+    val pagePadding = 20.dp
+    val listItemMinHeight = 56.dp
+    val buttonHeight = 48.dp
+    val touchTargetMin = 48.dp
+}
+
+/** 品牌圆角：标签 8dp / 控件 12dp / 卡片 16dp，统一体系不新增。 */
+object BrandCorners {
+    val label = 8.dp
+    val control = 12.dp
+    val card = 16.dp
+}

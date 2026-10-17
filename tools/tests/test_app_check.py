@@ -18,6 +18,8 @@ fixtures 约定（每个是一个迷你 Android 项目目录，只含必要的 g
 import sys
 import unittest
 from pathlib import Path
+import shutil
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import app_check as ac  # noqa: E402
@@ -108,6 +110,106 @@ class SecretsTest(unittest.TestCase):
 
     def test_secrets_warn_exit_0(self):
         self.assertEqual(ac.main([str(FIX / "secrets-warn")]), 0)
+
+
+class GitignoreTest(unittest.TestCase):
+    """local.properties / keystore.properties 的根锚定忽略写法（含 worktree）。"""
+
+    def _make_project(self, tmp, gitignore_lines, with_keystore=False):
+        root = Path(tmp) / "proj"
+        shutil.copytree(FIX / "valid", root)
+        # worktree 下 .git 是文件而不是目录，checker 必须仍识别为 git 仓库
+        (root / ".git").write_text("gitdir: /tmp/worktree\n", encoding="utf-8")
+        (root / "local.properties").write_text("sdk.dir=/sdk\n", encoding="utf-8")
+        if with_keystore:
+            (root / "keystore.properties").write_text(
+                "storePassword=dummy\n", encoding="utf-8")
+        (root / ".gitignore").write_text(
+            "\n".join(gitignore_lines) + "\n", encoding="utf-8")
+        return root
+
+    def test_plain_local_properties_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(tmp, ["local.properties"])
+            issues = ac.check(str(root))
+            self.assertEqual(find(issues, "local-properties-ignore"), [])
+
+    def test_root_anchored_local_properties_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(tmp, ["/local.properties"])
+            issues = ac.check(str(root))
+            self.assertEqual(
+                find(issues, "local-properties-ignore"), [],
+                f"worktree + /local.properties 不应误报：{issues}")
+
+    def test_unignored_local_properties_warned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(tmp, [".gradle/"])
+            issues = ac.check(str(root))
+            self.assertEqual(
+                len(find(issues, "local-properties-ignore", "WARN")), 1)
+
+    def test_root_anchored_keystore_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(
+                tmp, ["/keystore.properties"], with_keystore=True)
+            issues = ac.check(str(root))
+            hits = [i for i in find(issues, "secrets-plaintext")
+                    if i["file"] == "keystore.properties"]
+            self.assertEqual(hits, [])
+
+    def test_unignored_keystore_warned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(
+                tmp, [".gradle/"], with_keystore=True)
+            issues = ac.check(str(root))
+            hits = [i for i in find(issues, "secrets-plaintext", "WARN")
+                    if i["file"] == "keystore.properties"]
+            self.assertEqual(len(hits), 1)
+
+
+class DesignSystemTemplateTest(unittest.TestCase):
+    """设计系统模板与 app 实例必须逐字一致（替换 {{package}} 后）。"""
+
+    TEMPLATE = (
+        "package {{package}}.ui.components\n\n"
+        "/** 示例组件。 */\n"
+        "fun appFoo(): Int = 1\n"
+    )
+
+    def _make_project(self, tmp, instance_text):
+        root = Path(tmp) / "proj"
+        shutil.copytree(FIX / "valid", root)
+        tpl_dir = root / "docs" / "android" / "design-system"
+        tpl_dir.mkdir(parents=True)
+        (tpl_dir / "AppFoo.kt.template").write_text(
+            self.TEMPLATE, encoding="utf-8")
+        comp_dir = (root / "app" / "src" / "main" / "java" /
+                    "com" / "example" / "valid" / "ui" / "components")
+        comp_dir.mkdir(parents=True)
+        (comp_dir / "AppFoo.kt").write_text(instance_text, encoding="utf-8")
+        return root
+
+    def test_drift_is_warned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(
+                tmp,
+                "package com.example.valid.ui.components\n\n"
+                "/** 示例组件。 */\n"
+                "fun appFoo(): Int = 2\n")
+            issues = ac.check(str(root))
+            hits = find(issues, "design-system-templates", "WARN")
+            self.assertEqual(len(hits), 1,
+                             f"模板漂移应报一条 WARN：{issues}")
+            self.assertIn("AppFoo", hits[0]["message"])
+
+    def test_identical_template_no_warn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_project(
+                tmp, self.TEMPLATE.replace("{{package}}", "com.example.valid"))
+            issues = ac.check(str(root))
+            self.assertEqual(find(issues, "design-system-templates"), [],
+                             f"逐字一致时不应报警：{issues}")
 
 
 class CliTest(unittest.TestCase):

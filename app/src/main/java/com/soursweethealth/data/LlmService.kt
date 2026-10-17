@@ -58,7 +58,7 @@ class LlmService {
                 ChatRequest(
                     model = modelName,
                     messages = listOf(
-                        ChatMessage("system", "你是一位和蜃、经验丰富、十分体贴的家庭医生，同时也是敢说真心话的好朋友。用“您”称呼，语气亲切自然像与老朋友聊天。可适当加1-2个表情符号，用**加粗**强调关键信息，中文回复。"),
+                        ChatMessage("system", "你是一位谨慎、体贴的健康信息助手，不进行诊断或替代医生。用“您”称呼，语气亲切自然。可适当加1-2个表情符号，用**加粗**强调关键信息，中文回复；遇到危险数值应建议及时就医。"),
                         ChatMessage("user", prompt)
                     ),
                     max_tokens = maxTokens,
@@ -74,8 +74,8 @@ class LlmService {
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                val errBody = response.body?.string() ?: ""
-                emit(Result.failure<String>(Exception("API请求失败: ${response.code} $errBody")))
+                response.close()
+                emit(Result.failure<String>(Exception("API请求失败（HTTP ${response.code}），请检查地址、密钥和模型配置")))
                 return@flow
             }
 

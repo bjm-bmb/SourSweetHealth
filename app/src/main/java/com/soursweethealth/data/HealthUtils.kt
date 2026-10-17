@@ -18,6 +18,8 @@ object HealthUtils {
     fun bloodSugarLevel(value: Double, measureTime: String = "空腹（起床后）"): HealthLevel {
         val (normal, veryHigh) = bloodSugarThresholds(measureTime)
         return when {
+            value < 3.0 -> HealthLevel.VERY_LOW
+            value < 3.9 -> HealthLevel.LOW
             value < normal -> HealthLevel.NORMAL
             value < veryHigh -> HealthLevel.HIGH
             else -> HealthLevel.VERY_HIGH
@@ -73,6 +75,8 @@ object HealthUtils {
         val typeName = getTypeName(type)
         val unit = getUnit(type)
         return when (level) {
+            HealthLevel.VERY_LOW -> "${typeName}${String.format("%.1f", value)}${unit}，数值过低，若有意识不清等症状请立即就医"
+            HealthLevel.LOW -> "${typeName}${String.format("%.1f", value)}${unit}，数值偏低，请及时处理并复测"
             HealthLevel.HIGH -> "${typeName}${String.format("%.1f", value)}${unit}，略高于正常范围"
             HealthLevel.VERY_HIGH -> "${typeName}${String.format("%.1f", value)}${unit}，明显偏高，请注意"
             else -> null
@@ -81,5 +85,5 @@ object HealthUtils {
 }
 
 enum class HealthLevel {
-    NORMAL, HIGH, VERY_HIGH
+    VERY_LOW, LOW, NORMAL, HIGH, VERY_HIGH
 }

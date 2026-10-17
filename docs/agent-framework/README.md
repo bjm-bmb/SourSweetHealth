@@ -9,9 +9,9 @@
 除非任务卡明确只要求规划、分析或评审，App 任务默认采用 `bjm-app-delivery` 闭环：
 
 1. `app_planner` 只读规划；阻塞项先由主 Agent 澄清。任务涉及工程基线或签名变更时，计划中对照 `docs/android/` 规范写明依据与 `app_check.py` 预期结果。
-2. `app_developer` 按冻结的任务卡在任务 worktree 中实现，并完成构建自验（先运行 `python tools/app_check.py .` 修正全部 ERROR；再执行任务卡指定的构建验证命令，默认 `.\gradlew.bat testDebugUnitTest assembleDebug`，记录真实退出状态；任务卡要求真机验证时执行 `tools\device_test.ps1`——等待用户连机、安装启动、UI 断言、截图与日志取证，退出码 0 方为通过；再按 `review-checklist.md` 逐条自检），但不创建提交。**构建与真机验证完成前不得声称完成。**
+2. `app_developer` 按冻结的任务卡在任务 worktree 中实现，并完成构建自验（先运行 `python tools/app_check.py .` 修正全部 ERROR；再执行任务卡指定的构建验证命令，默认 `.\gradlew.bat testDebugUnitTest assembleDebug`，记录真实退出状态；任务卡要求真机验证时执行 `tools\device_test.ps1`——等待用户连机、安装启动、冒烟、`-UiSteps` 交互断言、截图与日志取证，退出码 0 方为通过；提交前必须运行 `python tools/scope_check.py --task <任务卡> --since <基线 SHA>`；再按 `review-checklist.md` 逐条自检），但不创建提交。**构建与真机验证完成前不得声称完成。**
 3. 主 Agent 根据开发报告在任务分支创建仅本地的 handoff 提交，记录 SHA；创建开发 worktree 前确认任务卡与 Agent 配置已在可见的 Git 基线内，创建 handoff 提交时只暂存任务允许路径内的本任务改动，且包含任务卡的最终快照；无法区分既有用户改动时停止。该提交不推送、不合并。
-4. `app_reviewer` 在另一份干净 worktree 中依据任务卡的固定需求快照验证该 SHA；HEAD 必须匹配 SHA，且不能有非忽略的未跟踪文件。评审先核对 git 状态，运行 `python tools/app_check.py .` 作为确定性底线（ERROR 直接判不合规，WARN 逐条人工确认），再亲自执行构建与单测命令复核，任务卡要求真机验证时亲自执行 `tools\device_test.ps1` 并核对 `result.json`、截图与 logcat，最后逐条人工评审。`PASS` 时汇总报告并等待人工审核；`FAIL` 时由主 Agent 将证据回传开发 Agent 修复，再创建新快照并复评。
+4. `app_reviewer` 在另一份干净 worktree 中依据任务卡的固定需求快照验证该 SHA；HEAD 必须匹配 SHA，且不能有非忽略的未跟踪文件。评审先核对 git 状态，运行 `python tools/app_check.py .` 与 `python tools/scope_check.py --task <任务卡> --since <SHA>` 作为确定性底线（ERROR 或越界直接判不合规，WARN 逐条人工确认），再亲自执行构建与单测命令复核，任务卡要求真机验证时亲自执行 `tools\device_test.ps1`（含 `-UiSteps`）并核对 `result.json`、`step-*.png`、截图与 logcat，最后逐条人工评审。`PASS` 时汇总报告并等待人工审核；`FAIL` 时由主 Agent 将证据回传开发 Agent 修复，再创建新快照并复评。
 5. 初始评审后最多允许两轮修复复评。`BLOCKED` 立即停止且不计入轮次；第三次评审仍为 `FAIL` 时停止为 `FAIL`，由主 Agent 请求下一步决定。
 6. 闭环收尾时按 `bjm-app-harvest` 回顾本轮可复用能力：有候选时主动询问用户是否沉淀回 app-agent 规范包，无候选时不打扰用户。
 
@@ -52,6 +52,7 @@ handoff 提交只解决独立验证和可追溯交接，不等同于用户审核
 任务收尾的可复用能力不是口头约定，而是落盘资产：
 
 - 目标项目：`docs/agent-framework/learnings/LRN-xxxx-*.md`，状态 `proposed`，由 `tools\harvest.ps1 -Action new` 创建。
+- 分发：`install.ps1` 把规范包内全部 `LRN-*.md` 条目同步到目标项目（带 `distributed_from: app-agent` 与 `harness_id` 标记，重装时刷新内容；ID 与项目自有条目冲突时自动改用下一个空闲编号），项目自有条目永不被改写，同步后自动 `-Action reindex` 重建 `INDEX.md`。
 - 规范包仓库：同目录，状态 `accepted` → 修改规范后 `merged`（或 `rejected` 留理由）。
 - 回传：`tools\harvest.ps1 -Action import -From "<项目>\docs\agent-framework\learnings"`，按内容指纹去重、ID 冲突自动重编号。
 - 索引：`INDEX.md` 由 `-Action reindex` 生成，`-Action validate` 校验字段与索引一致性。
@@ -109,7 +110,8 @@ handoff 提交只解决独立验证和可追溯交接，不等同于用户审核
 - `../android/app-coding-conventions.md`：编码约定（纯 Kotlin、包结构、单测、混淆取舍）。
 - `../android/signing-and-release.md`：签名三种模式与密钥安全红线。
 - `../android/device-test-automation.md`：真机测试分层、设备约定、证据要求与失败判据。
-- `../../tools/app_check.py`：工程基线确定性校验器（ERROR 退出码 1，WARN 需人工确认；阈值可用 CLI 参数覆盖）。
+- `../../tools/app_check.py`：工程基线确定性校验器（ERROR 退出码 1，WARN 需人工确认；阈值可用 CLI 参数覆盖）。另含三条 Compose 界面回归规则：`shapes-capsule`（ERROR）、`settings-write-scope`、`chat-list-reverse`（WARN）。
+- `../../tools/scope_check.py`：任务范围依从性校验器（`--task <任务卡> --since <基线 SHA>`）。改动必须全部落在任务卡「允许修改」路径内，越界退出码 1。
 - `../../tools/device_test.ps1`：真机测试执行脚本（退出码 0/1/2 对应 PASS/FAIL/BLOCKED，证据写入 `.agent-artifacts/device-test`）。
 - `../../tools/harvest.ps1`：经验库工具（new / list / import / promote / reject / validate / reindex）。
 - `../../tools/tests/`：校验器回归测试（`python -m unittest discover -s tools/tests`，改动校验器前后必须运行）。

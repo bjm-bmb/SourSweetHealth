@@ -4,7 +4,6 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,26 +11,32 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.soursweethealth.data.*
 import com.soursweethealth.ui.MainViewModel
+import com.soursweethealth.ui.components.*
 import com.soursweethealth.ui.theme.*
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
+// 头像色板：品牌绿与中性深色的组合（全部为深色，保证白字对比度 ≥ 4.5:1）
 val avatarColors = listOf(
-    Color(0xFF29B6F6), Color(0xFF66BB6A), Color(0xFFFF7043),
-    Color(0xFFAB47BC), Color(0xFFFFCA28), Color(0xFF26A69A)
+    Accent, AccentContainerDark, NeutralText, NeutralTextSecondary
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
+    val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
     val users by viewModel.users.collectAsState()
 
@@ -40,6 +45,23 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
     var showAddUserDialog by remember { mutableStateOf(false) }
     var showEditUserDialog by remember { mutableStateOf<User?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<User?>(null) }
+    var pendingCsv by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        val csv = pendingCsv
+        if (uri != null && csv != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                    writer.write('﻿'.toString())
+                    writer.write(csv)
+                } ?: error("无法打开文件")
+            }.onSuccess {
+                Toast.makeText(context, "记录已导出", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "导出失败：${it.message.orEmpty()}", Toast.LENGTH_LONG).show()
+            }
+        }
+        pendingCsv = null
+    }
 
     // Dialogs
     if (showUserManageDialog) {
@@ -54,13 +76,13 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                         showAddUserDialog = true
                     }) {
                         Icon(Icons.Default.PersonAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text("新增用户")
                     }
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.xs))
                     users.forEach { user ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -68,21 +90,25 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                                     .background(avatarColors[user.avatarColor % avatarColors.size]),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(user.name.first().toString(), color = Color.White, fontSize = 12.sp)
+                                Text(
+                                    user.name.firstOrNull()?.toString() ?: "?",
+                                    color = OnAccent,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
-                            Spacer(Modifier.width(8.dp))
-                            Text(user.name, modifier = Modifier.weight(1f), fontSize = 16.sp)
+                            Spacer(Modifier.width(Spacing.sm))
+                            Text(user.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                             IconButton(onClick = {
                                 showUserManageDialog = false
                                 showEditUserDialog = user
                             }) {
-                                Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
                             }
                             IconButton(onClick = {
                                 showUserManageDialog = false
                                 showDeleteConfirm = user
                             }) {
-                                Icon(Icons.Default.Delete, contentDescription = "删除", tint = HealthRed, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(22.dp))
                             }
                         }
                     }
@@ -131,7 +157,7 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                 TextButton(onClick = {
                     viewModel.deleteUser(user)
                     showDeleteConfirm = null
-                }) { Text("删除", color = HealthRed) }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) { Text("取消") }
@@ -143,35 +169,34 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (currentUser != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.background,
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .navigationBarsPadding(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = { navController.navigate("add_record") },
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Column {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = Spacing.pagePadding, vertical = Spacing.sm)
+                                .navigationBarsPadding(),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("添加记录", fontSize = 16.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { navController.navigate("health_analysis") },
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("健康分析", fontSize = 16.sp)
+                            Button(
+                                onClick = { navController.navigate("add_record") },
+                                modifier = Modifier.weight(1f).height(Spacing.buttonHeight),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(Spacing.xs))
+                                Text("添加记录", style = MaterialTheme.typography.bodyLarge)
+                            }
+                            OutlinedButton(
+                                onClick = { navController.navigate("health_analysis") },
+                                modifier = Modifier.weight(1f).height(Spacing.buttonHeight),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(Spacing.xs))
+                                Text("健康分析", style = MaterialTheme.typography.bodyLarge)
+                            }
                         }
                     }
                 }
@@ -182,7 +207,7 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .padding(horizontal = Spacing.pagePadding, vertical = Spacing.xs)
         ) {
             // Top bar
             Row(
@@ -190,11 +215,27 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { navController.navigate("llm_settings") }) {
-                    Icon(Icons.Default.Settings, contentDescription = "大模型设置", tint = MaterialTheme.colorScheme.primary)
+                Row {
+                    IconButton(onClick = { navController.navigate("llm_settings") }) {
+                        Icon(Icons.Default.Settings, contentDescription = "大模型设置", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    currentUser?.let { user ->
+                        IconButton(onClick = {
+                            viewModel.exportCsv(user) { csv ->
+                                pendingCsv = csv
+                                exportLauncher.launch("${user.name}-健康记录.csv")
+                            }
+                        }) {
+                            Icon(Icons.Default.FileDownload, contentDescription = "导出健康记录", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
-                Box {
-                    val color = currentUser?.let { avatarColors[it.avatarColor % avatarColors.size] } ?: Color.Gray
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showUserManageDialog = true }) {
+                        Icon(Icons.Default.ManageAccounts, contentDescription = "管理家庭成员", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box {
+                    val color = currentUser?.let { avatarColors[it.avatarColor % avatarColors.size] } ?: MaterialTheme.colorScheme.outline
                     val initial = currentUser?.name?.firstOrNull()?.toString() ?: "?"
                     Box(
                         modifier = Modifier.size(40.dp).clip(CircleShape).background(color)
@@ -206,7 +247,7 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(initial, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(initial, color = OnAccent, style = MaterialTheme.typography.bodyLarge)
                     }
                     DropdownMenu(
                         expanded = showUserSwitchMenu,
@@ -215,18 +256,24 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                     ) {
                         users.forEach { user ->
                             DropdownMenuItem(
-                                modifier = Modifier.height(40.dp),
+                                modifier = Modifier.height(48.dp),
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(
                                             modifier = Modifier.size(24.dp).clip(CircleShape)
                                                 .background(avatarColors[user.avatarColor % avatarColors.size]),
                                             contentAlignment = Alignment.Center
-                                        ) { Text(user.name.first().toString(), color = Color.White, fontSize = 11.sp) }
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(user.name, fontSize = 18.sp)
+                                        ) {
+                                            Text(
+                                                user.name.firstOrNull()?.toString() ?: "?",
+                                                color = OnAccent,
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                        Spacer(Modifier.width(Spacing.sm))
+                                        Text(user.name, style = MaterialTheme.typography.bodyLarge)
                                         if (user.id == currentUser?.id) {
-                                            Spacer(Modifier.width(4.dp))
+                                            Spacer(Modifier.width(Spacing.xs))
                                             Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                         }
                                     }
@@ -236,19 +283,23 @@ fun HomeScreen(viewModel: MainViewModel, navController: NavController) {
                         }
                     }
                 }
+                }
             }
 
             if (currentUser == null) {
-                Spacer(Modifier.height(24.dp))
-                Text("欢迎使用酸甜知己", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text("请长按右上角头像添加第一个用户", color = Color.Gray, fontSize = 16.sp)
+                Spacer(Modifier.height(Spacing.xxxl))
+                Text("欢迎使用酸甜知己", style = MaterialTheme.typography.headlineSmall)
+                AppEmptyState(
+                    message = "添加第一位家庭成员，开始记录血糖与尿酸。",
+                    actionText = "添加用户",
+                    onAction = { showAddUserDialog = true }
+                )
             } else {
                 val user = currentUser!!
-                Text("你好，${user.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
-                Spacer(Modifier.height(6.dp))
+                Text("你好，${user.name}", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(Spacing.xxl))
                 LatestRecordsSection(viewModel, user)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.xxl))
                 Box(modifier = Modifier.weight(1f)) {
                     TrendSection(viewModel, user)
                 }
@@ -265,7 +316,30 @@ fun LatestRecordsSection(viewModel: MainViewModel, user: User) {
     var showAdviceDialog by remember { mutableStateOf(false) }
     var adviceType by remember { mutableStateOf("") }
 
-    val age = LocalDate.now().year - user.birthYear
+    val age = HealthValidation.age(user.birthYear, user.birthMonth)
+    val aiPrivacyAccepted by viewModel.aiPrivacyAccepted.collectAsState()
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var pendingAdviceType by remember { mutableStateOf<String?>(null) }
+
+    fun startAdvice(type: String) {
+        adviceType = type
+        showAdviceDialog = true
+        val record = if (type == "blood_sugar") latestBS else latestUA
+        record?.let { viewModel.getQuickAdvice(type, it.value, user.gender, age, it.measureTime) }
+    }
+
+    if (showPrivacyDialog) {
+        AiPrivacyDialog(
+            onAccept = {
+                showPrivacyDialog = false
+                viewModel.setAiPrivacyAccepted(true) {
+                    pendingAdviceType?.let { startAdvice(it) }
+                    pendingAdviceType = null
+                }
+            },
+            onDismiss = { showPrivacyDialog = false; pendingAdviceType = null }
+        )
+    }
 
     // Check for abnormal values
     val bsWarning = latestBS?.let { HealthUtils.getWarningText("blood_sugar", it.value, user.gender, it.measureTime) }
@@ -284,17 +358,25 @@ fun LatestRecordsSection(viewModel: MainViewModel, user: User) {
             title = {
                 Text(
                     if (adviceType == "blood_sugar") "💡 血糖建议" else "💡 尿酸建议",
-                    fontWeight = FontWeight.Bold, fontSize = 18.sp
+                    style = MaterialTheme.typography.titleMedium
                 )
             },
             text = {
                 if (isAdvising && adviceResult == null) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text("正在获取建议...", fontSize = 15.sp)
+                        Text("正在获取建议...", style = MaterialTheme.typography.bodyLarge)
                     }
                 } else {
-                    Text(parseBoldText(adviceResult ?: "暂无建议"), fontSize = 17.sp, lineHeight = 26.sp)
+                    Column {
+                        Text(parseBoldText(adviceResult ?: "暂无建议"), style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(Spacing.md))
+                        Text(
+                            "AI 内容仅供健康信息参考，不能替代医生诊断。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -308,51 +390,51 @@ fun LatestRecordsSection(viewModel: MainViewModel, user: User) {
 
     Text(
         if (latestDate != null) "最新记录：$latestDate" else "暂无记录",
-        color = Color(0xFF999999), fontSize = 14.sp
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(Spacing.sm))
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
         HealthCard(Modifier.weight(1f).fillMaxHeight(), "血糖", latestBS, "blood_sugar", user.gender, bsWarning) {
-            adviceType = "blood_sugar"
-            showAdviceDialog = true
-            latestBS?.let { viewModel.getQuickAdvice("blood_sugar", it.value, user.gender, age, it.measureTime) }
+            if (aiPrivacyAccepted) startAdvice("blood_sugar") else {
+                pendingAdviceType = "blood_sugar"; showPrivacyDialog = true
+            }
         }
         HealthCard(Modifier.weight(1f).fillMaxHeight(), "尿酸", latestUA, "uric_acid", user.gender, uaWarning) {
-            adviceType = "uric_acid"
-            showAdviceDialog = true
-            latestUA?.let { viewModel.getQuickAdvice("uric_acid", it.value, user.gender, age, it.measureTime) }
+            if (aiPrivacyAccepted) startAdvice("uric_acid") else {
+                pendingAdviceType = "uric_acid"; showPrivacyDialog = true
+            }
         }
     }
 }
 
 @Composable
 fun HealthCard(modifier: Modifier, title: String, record: HealthRecord?, type: String, gender: String, warning: String? = null, onWarningClick: () -> Unit = {}) {
+    val levels = LocalHealthLevels.current
     val level = record?.let { HealthUtils.getLevel(type, it.value, gender, it.measureTime) }
     val levelColor = when (level) {
-        HealthLevel.NORMAL -> HealthGreen; HealthLevel.HIGH -> HealthYellow; HealthLevel.VERY_HIGH -> HealthRed; null -> Color(0xFFCCCCCC)
+        HealthLevel.VERY_LOW -> levels.critical; HealthLevel.LOW -> levels.low
+        HealthLevel.NORMAL -> levels.normal; HealthLevel.HIGH -> levels.high
+        HealthLevel.VERY_HIGH -> levels.critical; null -> MaterialTheme.colorScheme.outline
     }
     val levelText = when (level) {
+        HealthLevel.VERY_LOW -> "过低⚠️"; HealthLevel.LOW -> "偏低"
         HealthLevel.NORMAL -> "正常"; HealthLevel.HIGH -> "偏高"; HealthLevel.VERY_HIGH -> "偏高⚠️"; null -> "--"
     }
     val icon = if (type == "blood_sugar") Icons.Default.WaterDrop else Icons.Default.Science
 
-    Card(
-        modifier = modifier.shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000)),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    AppCard(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             // Header row: icon + title + badge
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().height(32.dp)
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = MaterialTheme.shapes.small,
                     color = levelColor.copy(alpha = 0.12f),
                     modifier = Modifier.size(32.dp)
                 ) {
@@ -360,31 +442,31 @@ fun HealthCard(modifier: Modifier, title: String, record: HealthRecord?, type: S
                         Icon(icon, contentDescription = null, tint = levelColor, modifier = Modifier.size(18.dp))
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(title, fontWeight = FontWeight.Medium, fontSize = 18.sp, color = Color(0xFF333333))
+                Spacer(Modifier.width(Spacing.sm))
+                Text(title, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
                 if (warning != null) {
                     Surface(
                         onClick = onWarningClick,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = levelColor.copy(alpha = 0.15f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                         ) {
-                            Text(levelText, color = levelColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Icon(Icons.Default.TouchApp, contentDescription = null, tint = levelColor, modifier = Modifier.size(13.dp))
+                            Text(levelText, color = levelColor, style = MaterialTheme.typography.labelSmall)
+                            Icon(Icons.Default.TouchApp, contentDescription = null, tint = levelColor, modifier = Modifier.size(12.dp))
                         }
                     }
                 } else {
-                    Surface(shape = RoundedCornerShape(10.dp), color = levelColor.copy(alpha = 0.12f)) {
-                        Text(levelText, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), color = levelColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Surface(shape = MaterialTheme.shapes.small, color = levelColor.copy(alpha = 0.12f)) {
+                        Text(levelText, modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs), color = levelColor, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             // Value row
             Row(
                 verticalAlignment = Alignment.Bottom,
@@ -392,14 +474,20 @@ fun HealthCard(modifier: Modifier, title: String, record: HealthRecord?, type: S
             ) {
                 Text(
                     record?.value?.let { if (type == "uric_acid") String.format("%.0f", it) else String.format("%.1f", it) } ?: "--",
-                    fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333)
+                    style = MaterialTheme.typography.displaySmall
                 )
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(Spacing.xs))
                 Text(
                     HealthUtils.getUnit(type),
-                    fontSize = 15.sp, color = Color(0xFFAAAAAA),
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = Spacing.xs)
                 )
+            }
+            record?.let {
+                val measured = Instant.ofEpochMilli(it.measuredAt).atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
+                Text("$measured · ${it.measureTime}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -421,42 +509,49 @@ fun UserFormDialog(
     var birthYear by remember { mutableStateOf(initialBirthYear) }
     var birthMonth by remember { mutableStateOf(initialBirthMonth) }
     var selectedColor by remember { mutableIntStateOf(initialColor) }
+    var formError by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.background,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("姓名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("性别：")
                     listOf("男", "女").forEach { g ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { gender = g }.padding(horizontal = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { gender = g }.padding(horizontal = Spacing.sm)) {
                             RadioButton(selected = gender == g, onClick = { gender = g })
                             Text(g)
                         }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(value = birthYear, onValueChange = { birthYear = it.filter { c -> c.isDigit() }.take(4) }, label = { Text("出生年") }, singleLine = true, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = birthMonth, onValueChange = { birthMonth = it.filter { c -> c.isDigit() }.take(2) }, label = { Text("月") }, singleLine = true, modifier = Modifier.weight(0.6f))
                 }
-                Text("头像颜色：", fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                formError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                Text("头像颜色：", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     avatarColors.forEachIndexed { idx, color ->
                         Box(
                             modifier = Modifier.size(36.dp).clip(CircleShape).background(color)
-                                .then(if (idx == selectedColor) Modifier.border(3.dp, Color.Black, CircleShape) else Modifier)
+                                .then(if (idx == selectedColor) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
                                 .clickable { selectedColor = idx },
                             contentAlignment = Alignment.Center
-                        ) { if (idx == selectedColor) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+                        ) { if (idx == selectedColor) Text("✓", color = OnAccent, fontWeight = FontWeight.Medium) }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name, gender, birthYear.toIntOrNull() ?: 2000, birthMonth.toIntOrNull() ?: 1, selectedColor) }) { Text("确定") }
+            TextButton(onClick = {
+                val year = birthYear.toIntOrNull()
+                val month = birthMonth.toIntOrNull()
+                val error = HealthValidation.validateUser(name, year, month)
+                if (error == null) onConfirm(name.trim(), gender, year!!, month!!, selectedColor) else formError = error
+            }) { Text("确定") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )

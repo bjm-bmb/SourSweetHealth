@@ -70,6 +70,23 @@ SECRET_KEY_RE = re.compile(
 
 README_NAMES = ("README.md", "readme.md", "Readme.md", "README.MD")
 
+# ---- Compose 界面回归的机械判定规则 ----
+# M3 的 AlertDialog/Dialog/SearchBar 默认取 shapes.extraLarge；把 extraLarge
+# 定义成胶囊会让这些组件的容器变成椭圆并裁切内容。
+SHAPES_EXTRA_LARGE_RE = re.compile(
+    r"extraLarge\s*=\s*(?:[A-Za-z_][\w.]*\.)?"
+    r"(?:CircleShape|RoundedCornerShape\(\s*percent\s*=\s*(?:50|100)\b)")
+COMPOSE_FILE_SUFFIX = ".kt"
+UI_COMPONENT_HINT_RE = re.compile(r"@Composable|RememberObserver|remember\s*\{")
+REMEMBER_SCOPE_RE = re.compile(r"\brememberCoroutineScope\s*\(")
+PERSIST_WRITE_RE = re.compile(r"\.\s*(?:save|set)[A-Z]\w*\s*\(")
+PERMISSION_REQUEST_RE = re.compile(
+    r"ActivityResultContracts\.RequestPermission|requestPermissions\s*\(")
+LAZY_COLUMN_RE = re.compile(r"\bLazyColumn\s*\(")
+REVERSE_LAYOUT_RE = re.compile(r"\breverseLayout\s*=\s*true\b")
+SCROLL_TO_LAST_RE = re.compile(
+    r"scrollToItem\s*\([^)]*Int\.MAX_VALUE")
+
 
 def read_text(path):
     """读取文件为无 \\r 的文本；文件不存在时抛出。"""
@@ -277,7 +294,9 @@ def check(project_dir, compile_sdk=34, target_sdk=34, min_sdk=26, jdk=17,
 
     # ---- local-properties-ignore（W）：本机私有文件必须被忽略 ----
     if (root / ".git").exists() and (root / "local.properties").is_file():
-        if not _gitignore_has(root, r"^\s*local\.properties\s*$"):
+        # .gitignore 允许写成 `local.properties` 或根锚定的 `/local.properties`；
+        # worktree 下 .git 是文件而非目录，不能用 is_dir 判断。
+        if not _gitignore_has(root, r"^\s*/?local\.properties\s*$"):
             warn("local-properties-ignore", ".gitignore", 0,
                  "local.properties 存在且本目录是 git 仓库，但 .gitignore 未忽略 "
                  "local.properties（含本机 sdk.dir，不应入库）")
@@ -292,7 +311,7 @@ def check(project_dir, compile_sdk=34, target_sdk=34, min_sdk=26, jdk=17,
                      f"疑似明文凭据键「{key}」：口令/API Key 不应入库，"
                      f"应放 gitignored 的 keystore.properties 或构建期从环境变量注入")
     if (root / "keystore.properties").is_file():
-        if not _gitignore_has(root, r"^\s*keystore\.properties\s*$"):
+        if not _gitignore_has(root, r"^\s*/?keystore\.properties\s*$"):
             warn("secrets-plaintext", "keystore.properties", 0,
                  "keystore.properties 存在但未被 .gitignore 忽略，签名凭据有入库风险")
 
@@ -309,9 +328,71 @@ def check(project_dir, compile_sdk=34, target_sdk=34, min_sdk=26, jdk=17,
              "未配置 APK outputFileName，建议命名为 <app>-<versionName>.apk "
              "（产物目录 app/build/outputs/apk/<buildType>/）")
 
+    # ---- design-system-templates（W）：模板与实例必须逐字一致 ----
+    # 设计系统模板是通用组件的唯一来源；app 侧实例化后若只改实例，
+    # 模板会逐渐失效（缺参数、旧 API、缺 import）。此处做机械比对。
+    if ns:
+        tpl_dir = root / "docs" / "android" / "design-system"
+        comp_root = root / "app" / "src" / "main" / "java"
+        if tpl_dir.is_dir() and comp_root.is_dir():
+            instances = {}
+            for inst in comp_root.rglob("*.kt"):
+                if inst.parent.name == "components" and \
+                        inst.parent.parent.name == "ui":
+                    instances[inst.stem] = inst
+            for tpl in sorted(tpl_dir.glob("*.kt.template")):
+                name = tpl.name[:-len(".kt.template")]
+                inst = instances.get(name)
+                if inst is None:
+                    continue
+                expected = read_text(tpl).replace(
+                    "{{package}}", ns.group(1)).strip()
+                actual = read_text(inst).strip()
+                if expected != actual:
+                    rel = inst.relative_to(root).as_posix()
+                    warn("design-system-templates", rel, 0,
+                         f"模板与实例不一致：docs/android/design-system/"
+                         f"{tpl.name} 与 {rel}；请先更新模板再实例化，"
+                         f"避免设计系统模板与 app 组件漂移")
+
     # ---- readme（W）：根目录应有 README ----
     if not any((root / n).is_file() for n in README_NAMES):
         warn("readme", "README.md", 0, "根目录缺少 README.md")
+
+    # ---- compose-ui-regressions（E/W）：界面回归的机械判定 ----
+    # 以下三条来自真实回归事故：一旦命中，编译与冒烟都不会报错，只有真机
+    # 看得见。规则把可机械判定的部分前移到确定性底线。
+    src_root = root / "app" / "src" / "main"
+    if src_root.is_dir():
+        for kt in sorted(src_root.rglob("*" + COMPOSE_FILE_SUFFIX)):
+            text = read_text(kt)
+            if not UI_COMPONENT_HINT_RE.search(text):
+                continue
+            rel = kt.relative_to(root).as_posix()
+
+            m = SHAPES_EXTRA_LARGE_RE.search(text)
+            if m:
+                err("shapes-capsule", rel, line_of(text, m.start()),
+                    "shapes.extraLarge 被定义为胶囊/百分比圆角；Material3 的 "
+                    "AlertDialog/Dialog/SearchBar 默认使用 extraLarge，会被渲染成"
+                    "椭圆并裁切内容。请改用绝对圆角（≤28dp），胶囊形状单独定义")
+
+            if REMEMBER_SCOPE_RE.search(text) and PERSIST_WRITE_RE.search(text) \
+                    and PERMISSION_REQUEST_RE.search(text):
+                m2 = PERSIST_WRITE_RE.search(text)
+                warn("settings-write-scope", rel, line_of(text, m2.start()),
+                     "同一 Compose 文件中同时存在 rememberCoroutineScope、持久化写入与"
+                     "运行时权限请求；权限流程会暂停/重建 Activity 并取消 composition "
+                     "协程，导致设置不生效。请改用 Application 级 scope，并先写入后请求权限")
+
+            if LAZY_COLUMN_RE.search(text) and SCROLL_TO_LAST_RE.search(text) \
+                    and not REVERSE_LAYOUT_RE.search(text):
+                m3 = SCROLL_TO_LAST_RE.search(text)
+                warn("chat-list-reverse", rel, line_of(text, m3.start()),
+                     "列表用 scrollToItem(.., Int.MAX_VALUE) 定位末尾且未使用 "
+                     "reverseLayout；首帧会先渲染顶部再滚动（可见“从第一条刷到最新”），"
+                     "且测量未完成时会被过早 clamp。聊天/时间线列表请改用 "
+                     "reverseLayout = true 并 scrollToItem(0)")
 
     return issues
 

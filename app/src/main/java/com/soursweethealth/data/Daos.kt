@@ -23,25 +23,25 @@ interface UserDao {
 
 @Dao
 interface HealthRecordDao {
-    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY date DESC, createdAt DESC")
+    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY measuredAt DESC, createdAt DESC")
     fun getRecordsByUser(userId: Long): Flow<List<HealthRecord>>
 
-    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type ORDER BY date DESC, createdAt DESC")
+    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type ORDER BY measuredAt DESC, createdAt DESC")
     fun getRecordsByUserAndType(userId: Long, type: String): Flow<List<HealthRecord>>
 
-    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
+    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type AND date BETWEEN :startDate AND :endDate ORDER BY measuredAt ASC, createdAt ASC")
     fun getRecordsByDateRange(userId: Long, type: String, startDate: String, endDate: String): Flow<List<HealthRecord>>
 
-    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY date DESC, createdAt DESC LIMIT 1")
+    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY measuredAt DESC, createdAt DESC LIMIT 1")
     fun getLatestRecord(userId: Long): Flow<HealthRecord?>
 
-    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type ORDER BY date DESC, createdAt DESC LIMIT 1")
+    @Query("SELECT * FROM records WHERE userId = :userId AND type = :type ORDER BY measuredAt DESC, createdAt DESC LIMIT 1")
     fun getLatestRecordByType(userId: Long, type: String): Flow<HealthRecord?>
 
-    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY date ASC")
+    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY measuredAt ASC, createdAt ASC")
     suspend fun getAllRecordsForUser(userId: Long): List<HealthRecord>
 
-    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY date DESC, createdAt DESC LIMIT :limit")
+    @Query("SELECT * FROM records WHERE userId = :userId ORDER BY measuredAt DESC, createdAt DESC LIMIT :limit")
     suspend fun getLatestRecordsForUser(userId: Long, limit: Int): List<HealthRecord>
 
     @Insert

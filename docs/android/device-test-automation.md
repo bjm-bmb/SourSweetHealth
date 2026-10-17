@@ -68,6 +68,7 @@ powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . -Sk
 
 - 无 `adb`、无 `gradlew.bat`；
 - 等待超时仍无设备，或设备长期 `unauthorized` / `offline`；
+- 无法隔离设备上已保存的凭据（见 7.1）；
 - JDK/SDK 环境缺失导致无法构建。
 
 ## 六、androidTest 依赖基线
@@ -96,8 +97,40 @@ powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . -Sk
 - 不记录口令、Token、API Key；发现日志中出现凭据立即清除并报告。
 - 不自动发版、不上架、不推送远端。
 
+### 7.1 取证前凭据隔离（必须）
+
+- 应用持久化 API Key / Token 时，截图、录屏或启动取证前必须先隔离：优先 `adb shell pm clear <applicationId>`，或改用独立测试包/测试用户；不能清数据时，先 `am force-stop`，再移出 `shared_prefs` 中的凭据文件并确认目录为空。
+- `am force-stop` 本身不足以隔离：旧进程可能回写 SharedPreferences，使应用恢复真实凭据并联网。
+- 需要展示登录态、问候等界面时，只注入 dummy 值或使用本地缓存文本，禁止发起真实网络请求。
+- 取证后恢复原数据并校验；无法完成隔离时判定为 `BLOCKED`，不得带真实凭据取证。
+
 ## 八、当前限制
 
 - 无 CI 集成：测试由 Agent 在本机触发，设备可用性依赖人工连接。
 - 未覆盖性能、功耗、弱网、多机型矩阵；这些需要独立测试方案。
 - 截图仅作人工核对证据，不做像素级图像比对。
+
+## 交互级复核参数（-UiSteps）
+
+`tools\device_test.ps1` 支持 `-UiSteps "<步骤串>"`，在冒烟与崩溃检查之间执行界面交互断言：
+
+| 步骤 | 含义 |
+| --- | --- |
+| `tap:控件文本` | 用 uiautomator dump 按 `text` 或 `content-desc` 精确匹配，点击其 bounds 中心 |
+| `assert:文本` | 重新 dump，断言当前界面包含该文本 |
+| `wait:毫秒` | 等待（动画/网络） |
+| `shot:名称` | 截图到 `step-<序号>-<名称>.png` |
+
+示例：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . `
+  -UiSteps "tap:设置;assert:自动涌现;tap:自动涌现;assert:每天早上 6 点;shot:surge-dialog"
+```
+
+约定：
+
+- 未提供 `-UiSteps` 时结果记为 `SKIP`；涉及界面的任务卡不得以 SKIP 作为验收证据。
+- 断言失败立即 FAIL（退出码 1），并保存 `step-*-assert-fail-*.png`。
+- 首屏类改动配合 300ms 连拍，确认「第一次可见帧」即目标状态。
+- 设置项类改动需读取应用私有存储确认持久化，不能只看界面是否关闭。

@@ -31,3 +31,19 @@
 收到主 Agent 回传的评审 FAIL 时，将其视为同一任务的一次修复轮次：只修复报告证据支持、且仍位于原任务允许路径内的问题。评审 BLOCKED、需求歧义、范围扩大或修复轮次超过任务卡上限时，不做猜测性改动，应将阻塞回报主 Agent。
 
 完成后说明：任务类型、修改与新增的文件、实现与任务卡要点的对应关系、`app_check.py` 与构建/单测命令及真实退出状态、真机验证退出码与证据目录（任务卡要求时）、APK 产物路径、已知假设，以及评审所需的后续工作。开发 Agent 不创建提交、不推送、不合并，由主 Agent 负责本地 handoff 快照交接。
+
+## 依从性硬约束（强制）
+
+1. **只改任务卡「允许修改」内的路径。** 发现必须改动范围外文件时，停止并回报主 Agent，不得自行扩范围，也不得用「顺手修复」解释。
+2. **禁止把工作区既有改动纳入本任务。** 交付前必须让 `git status` 干净（或明确记录哪些既有改动与本任务无关）；handoff 提交只暂存本任务允许路径内的文件。
+3. **提交前机检（缺一不可）**：
+   ```powershell
+   python tools/app_check.py .
+   python tools/scope_check.py --task docs/agent-framework/tasks/<本任务卡>.md --since <基线 SHA>
+   .\gradlew.bat testDebugUnitTest assembleDebug
+   ```
+   任一项非 0 退出码都不得声称完成。`app_check.py` 的 `shapes-capsule` 为 ERROR，`settings-write-scope`、`chat-list-reverse` 为 WARN，须逐条确认并说明。
+4. **界面改动必须做交互级自验**：按任务卡的「交互必点路径」执行
+   `powershell -ExecutionPolicy Bypass -File tools\device_test.ps1 -ProjectDir . -Serial <serial> -UiSteps "<步骤>"`，
+   确认首屏「第一次可见帧」就是目标状态（用连拍核对），并检查每步截图。仅有冒烟 PASS 不算完成。
+5. **未改动区域的回归自查**：对照任务卡「明确不修改」，逐项确认对应文件未被改动、对应行为未被影响。

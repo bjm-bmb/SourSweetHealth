@@ -245,8 +245,36 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
 
     val allRecords by viewModel.getRecordsByType(user.id, selectedType).collectAsState(initial = emptyList())
 
+    // 色带（三区）依据：血糖阈值随测量时段变化；「全部」时按记录中最常见的时段绘制，并在标题处标注
+    val chartRecords = remember(selectedRange, records, allRecords, selectedMeasureTime) {
+        val base = if (selectedRange == "all") allRecords.reversed() else records
+        if (selectedMeasureTime == "全部") base else base.filter { it.measureTime == selectedMeasureTime }
+    }
+    val zoneMeasureTime = when {
+        selectedMeasureTime != "全部" -> selectedMeasureTime
+        selectedType == "blood_sugar" -> chartRecords
+            .groupingBy { it.measureTime }.eachCount()
+            .maxByOrNull { it.value }?.key
+        else -> selectedMeasureTime
+    }
+    val zoneNote = if (selectedType == "blood_sugar" && selectedMeasureTime == "全部" && zoneMeasureTime != null) {
+        "色带按「${zoneMeasureTime}」"
+    } else {
+        null
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        Text("趋势", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "趋势",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            if (zoneNote != null) {
+                Text(zoneNote, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+            }
+        }
         Spacer(Modifier.height(Spacing.sm))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -360,11 +388,6 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
             // Chart area — use filtered records for range chips, allRecords for "查看全部"
             // getRecordsByDateRange returns ASC (oldest→newest) — already correct order for the chart
             // getRecordsByUserAndType returns DESC (newest→oldest) — needs reversing
-            val chartRecords = remember(selectedRange, records, allRecords, selectedMeasureTime) {
-                val base = if (selectedRange == "all") allRecords.reversed() else records
-                if (selectedMeasureTime == "全部") base else base.filter { it.measureTime == selectedMeasureTime }
-            }
-            val effectiveMeasureTime = if (selectedMeasureTime == "全部" && selectedType == "blood_sugar") null else selectedMeasureTime
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 if (allRecords.isEmpty()) {
                     Text(
@@ -383,7 +406,7 @@ fun TrendSection(viewModel: MainViewModel, user: User) {
                         records = remember(chartRecords) { chartRecords },
                         type = selectedType,
                         gender = user.gender,
-                        measureTime = effectiveMeasureTime,
+                        measureTime = zoneMeasureTime,
                         onEditRecord = { record ->
                             editValueText = if (selectedType == "uric_acid") String.format("%.0f", record.value) else String.format("%.1f", record.value)
                             val local = Instant.ofEpochMilli(record.measuredAt).atZone(ZoneId.systemDefault())
